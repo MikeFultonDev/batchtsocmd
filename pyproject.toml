@@ -43,9 +43,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/fultonm/batchtsocmd"
-Repository = "https://github.com/fultonm/batchtsocmd"
-Issues = "https://github.com/fultonm/batchtsocmd/issues"
+Homepage = "https://github.com/MikeFultonDev/batchtsocmd"
+Repository = "https://github.com/MikeFultonDev/batchtsocmd"
+Issues = "https://github.com/MikeFultonDev/batchtsocmd/issues"
 
 [project.scripts]
 batchtsocmd = "batchtsocmd.main:main"
