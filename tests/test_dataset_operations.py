@@ -5,6 +5,8 @@ Test dataset allocation and deletion operations using batchtsocmd
 
 import os
 import sys
+import subprocess
+import threading
 import tempfile
 import unittest
 from zoautil_py import datasets
@@ -109,6 +111,23 @@ class TestDatasetOperations(unittest.TestCase):
                         systsin2_path, sysin2_path, sysprint2_path]:
                 if path and os.path.exists(path):
                     os.unlink(path)
+    def _write_to_pipe(self, pipe_path, content):
+        """Helper method to write to a named pipe in a separate thread"""
+        try:
+            with open(pipe_path, 'w') as f:
+                f.write(content)
+        except Exception as e:
+            print(f"Error writing to pipe {pipe_path}: {e}", file=sys.stderr)
+    
+    def _read_from_pipe(self, pipe_path, encoding='ibm1047'):
+        """Helper method to read from a named pipe"""
+        try:
+            with open(pipe_path, 'r', encoding=encoding) as f:
+                return f.read()
+        except Exception as e:
+            print(f"Error reading from pipe {pipe_path}: {e}", file=sys.stderr)
+            return ""
+    
     def test_02_allocate_and_delete_dataset_with_pipes(self):
         """Test allocating and deleting a dataset using named pipes"""
         
@@ -129,13 +148,26 @@ class TestDatasetOperations(unittest.TestCase):
             os.mkfifo(sysin_pipe)
             os.mkfifo(systsprt_pipe)
             
-            # Write to SYSTSIN pipe in background
-            with open(systsin_pipe, 'w') as f:
-                f.write(f"alloc da(temp.batchtso.dataset) new\n")
+            # Start threads to write to input pipes
+            systsin_thread = threading.Thread(
+                target=self._write_to_pipe,
+                args=(systsin_pipe, f"alloc da(temp.batchtso.dataset) new\n")
+            )
+            sysin_thread = threading.Thread(
+                target=self._write_to_pipe,
+                args=(sysin_pipe, "")
+            )
             
-            # Write to SYSIN pipe in background
-            with open(sysin_pipe, 'w') as f:
-                f.write("")  # Empty SYSIN
+            systsin_thread.start()
+            sysin_thread.start()
+            
+            # Start thread to read from output pipe
+            systsprt_output = []
+            def read_systsprt():
+                systsprt_output.append(self._read_from_pipe(systsprt_pipe))
+            
+            systsprt_thread = threading.Thread(target=read_systsprt)
+            systsprt_thread.start()
             
             # Execute allocation command
             rc = execute_tso_command(
@@ -145,17 +177,20 @@ class TestDatasetOperations(unittest.TestCase):
                 verbose=False
             )
             
+            # Wait for threads to complete
+            systsin_thread.join(timeout=10)
+            sysin_thread.join(timeout=10)
+            systsprt_thread.join(timeout=10)
+            
             # Verify return code is 0
             self.assertEqual(rc, 0, f"Allocation command failed with RC={rc}")
             
-            # Read and verify SYSTSPRT output
-            with open(systsprt_pipe, 'r', encoding='ibm1047') as f:
-                output = f.read().strip()
-                # Output should be empty or contain only whitespace/headers
-                self.assertTrue(
-                    len(output) == 0 or output.isspace(),
-                    f"Expected no output, but got: {output}"
-                )
+            # Verify no output (or minimal output)
+            output = systsprt_output[0].strip() if systsprt_output else ""
+            self.assertTrue(
+                len(output) == 0 or output.isspace(),
+                f"Expected no output, but got: {output}"
+            )
             
             # Create named pipes for second command (deletion)
             systsin2_pipe = f"/tmp/systsin_{os.getpid()}_2.pipe"
@@ -166,13 +201,26 @@ class TestDatasetOperations(unittest.TestCase):
             os.mkfifo(sysin2_pipe)
             os.mkfifo(systsprt2_pipe)
             
-            # Write to SYSTSIN pipe
-            with open(systsin2_pipe, 'w') as f:
-                f.write(f"del temp.batchtso.dataset\n")
+            # Start threads to write to input pipes
+            systsin2_thread = threading.Thread(
+                target=self._write_to_pipe,
+                args=(systsin2_pipe, f"del temp.batchtso.dataset\n")
+            )
+            sysin2_thread = threading.Thread(
+                target=self._write_to_pipe,
+                args=(sysin2_pipe, "")
+            )
             
-            # Write to SYSIN pipe
-            with open(sysin2_pipe, 'w') as f:
-                f.write("")  # Empty SYSIN
+            systsin2_thread.start()
+            sysin2_thread.start()
+            
+            # Start thread to read from output pipe
+            systsprt2_output = []
+            def read_systsprt2():
+                systsprt2_output.append(self._read_from_pipe(systsprt2_pipe))
+            
+            systsprt2_thread = threading.Thread(target=read_systsprt2)
+            systsprt2_thread.start()
             
             # Execute deletion command
             rc = execute_tso_command(
@@ -182,18 +230,22 @@ class TestDatasetOperations(unittest.TestCase):
                 verbose=False
             )
             
+            # Wait for threads to complete
+            systsin2_thread.join(timeout=10)
+            sysin2_thread.join(timeout=10)
+            systsprt2_thread.join(timeout=10)
+            
             # Verify return code is 0
             self.assertEqual(rc, 0, f"Deletion command failed with RC={rc}")
             
-            # Read and verify SYSTSPRT output contains expected deletion message
-            with open(systsprt2_pipe, 'r', encoding='ibm1047') as f:
-                output = f.read()
-                expected_msg = f"ENTRY (A) {self.test_dataset} DELETED"
-                self.assertIn(
-                    expected_msg,
-                    output,
-                    f"Expected '{expected_msg}' in SYSTSPRT output, but got: {output}"
-                )
+            # Verify output contains expected deletion message in SYSTSPRT
+            output = systsprt2_output[0] if systsprt2_output else ""
+            expected_msg = f"ENTRY (A) {self.test_dataset} DELETED"
+            self.assertIn(
+                expected_msg,
+                output,
+                f"Expected '{expected_msg}' in SYSTSPRT output, but got: {output}"
+            )
             
         finally:
             # Clean up named pipes
