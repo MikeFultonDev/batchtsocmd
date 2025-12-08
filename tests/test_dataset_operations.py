@@ -18,7 +18,7 @@ class TestDatasetOperations(unittest.TestCase):
     def setUpClass(cls):
         """Set up test environment"""
         # Get the user's HLQ
-        cls.hlq = datasets.hlq()
+        cls.hlq = datasets.get_hlq()
         cls.test_dataset = f"{cls.hlq}.TEMP.BATCHTSO.DATASET"
         
         # Clean up any existing test dataset
