@@ -38,6 +38,12 @@ dependencies = [
 dev = [
     "pytest>=7.0.0",
     "build>=0.10.0",
+]
+test = [
+    "pytest>=7.0.0",
+]
+publish = [
+    "build>=0.10.0",
     "twine>=3.0.0,<4.0.0",
 ]
 
