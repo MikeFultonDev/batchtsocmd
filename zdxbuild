@@ -12,6 +12,11 @@ if [ $rc -gt 0 ]; then
     exit $rc
 fi
 
-gmake all
+python3 -m pip install -e ".[dev]"
+rc=$?
+if [ $rc -gt 0 ]; then
+    exit $rc
+fi
+gmake test
 rc=$?
 exit $rc
