@@ -27,7 +27,6 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: System :: Systems Administration",
 ]
-platforms = ["z/OS"]
 keywords = ["zos", "tso", "mainframe", "ebcdic", "ikjeft1b"]
 requires-python = ">=3.8"
 dependencies = [
