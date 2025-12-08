@@ -79,28 +79,28 @@ class TestDatasetOperations(unittest.TestCase):
                 sysin2.write("")  # Empty SYSIN
                 sysin2_path = sysin2.name
             
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.sysprint', delete=False) as sysprint2:
-                sysprint2_path = sysprint2.name
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.systsprt', delete=False) as systsprt2:
+                systsprt2_path = systsprt2.name
             
             # Execute deletion command
             rc = execute_tso_command(
                 systsin_file=systsin2_path,
                 sysin_file=sysin2_path,
-                sysprint_file=sysprint2_path,
+                systsprt_file=systsprt2_path,
                 verbose=False
             )
             
             # Verify return code is 0
             self.assertEqual(rc, 0, f"Deletion command failed with RC={rc}")
             
-            # Verify output contains expected deletion message
-            with open(sysprint2_path, 'r', encoding='ibm1047') as f:
+            # Verify output contains expected deletion message in SYSTSPRT
+            with open(systsprt2_path, 'r', encoding='ibm1047') as f:
                 output = f.read()
                 expected_msg = f"ENTRY (A) {self.test_dataset} DELETED"
                 self.assertIn(
                     expected_msg,
                     output,
-                    f"Expected '{expected_msg}' in output, but got: {output}"
+                    f"Expected '{expected_msg}' in SYSTSPRT output, but got: {output}"
                 )
             
         finally:
