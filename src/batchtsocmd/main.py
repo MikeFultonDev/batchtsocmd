@@ -149,7 +149,7 @@ def execute_tso_command(systsin_file: str, sysin_file: str,
         
         # Add SYSPRINT - use stdout if not specified, tagged as IBM-1047
         if sysprint_file:
-            dds.append(DDStatement('SYSPRINT', FileDefinition(sysprint_file)))
+            dds.append(DDStatement('SYSPRINT', FileDefinition(sysprint_file + ",filedata=binary")))
         else:
             # Create a temporary file for stdout that will be tagged
             temp_sysprint = tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix='.sysprint')
