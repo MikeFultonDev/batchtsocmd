@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+export HOSTNAME="$(hostname -s)"
+
+BATCHTSOCMDDIR="$(cd "$(dirname "$0")" > /dev/null 2>&1 && pwd -P)"
+
+export BATCHTSOCMDDIR
+
+source setenv
+rc=$?
+if [ $rc -gt 0 ]; then
+    exit $rc
+fi
+
+gmake all
+rc=$?
+exit $rc
