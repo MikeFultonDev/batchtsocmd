@@ -109,6 +109,99 @@ class TestDatasetOperations(unittest.TestCase):
                         systsin2_path, sysin2_path, sysprint2_path]:
                 if path and os.path.exists(path):
                     os.unlink(path)
+    def test_02_allocate_and_delete_dataset_with_pipes(self):
+        """Test allocating and deleting a dataset using named pipes"""
+        
+        systsin_pipe = None
+        sysin_pipe = None
+        systsprt_pipe = None
+        systsin2_pipe = None
+        sysin2_pipe = None
+        systsprt2_pipe = None
+        
+        try:
+            # Create named pipes for first command (allocation)
+            systsin_pipe = f"/tmp/systsin_{os.getpid()}_1.pipe"
+            sysin_pipe = f"/tmp/sysin_{os.getpid()}_1.pipe"
+            systsprt_pipe = f"/tmp/systsprt_{os.getpid()}_1.pipe"
+            
+            os.mkfifo(systsin_pipe)
+            os.mkfifo(sysin_pipe)
+            os.mkfifo(systsprt_pipe)
+            
+            # Write to SYSTSIN pipe in background
+            with open(systsin_pipe, 'w') as f:
+                f.write(f"alloc da(temp.batchtso.dataset) new\n")
+            
+            # Write to SYSIN pipe in background
+            with open(sysin_pipe, 'w') as f:
+                f.write("")  # Empty SYSIN
+            
+            # Execute allocation command
+            rc = execute_tso_command(
+                systsin_file=systsin_pipe,
+                sysin_file=sysin_pipe,
+                systsprt_file=systsprt_pipe,
+                verbose=False
+            )
+            
+            # Verify return code is 0
+            self.assertEqual(rc, 0, f"Allocation command failed with RC={rc}")
+            
+            # Read and verify SYSTSPRT output
+            with open(systsprt_pipe, 'r', encoding='ibm1047') as f:
+                output = f.read().strip()
+                # Output should be empty or contain only whitespace/headers
+                self.assertTrue(
+                    len(output) == 0 or output.isspace(),
+                    f"Expected no output, but got: {output}"
+                )
+            
+            # Create named pipes for second command (deletion)
+            systsin2_pipe = f"/tmp/systsin_{os.getpid()}_2.pipe"
+            sysin2_pipe = f"/tmp/sysin_{os.getpid()}_2.pipe"
+            systsprt2_pipe = f"/tmp/systsprt_{os.getpid()}_2.pipe"
+            
+            os.mkfifo(systsin2_pipe)
+            os.mkfifo(sysin2_pipe)
+            os.mkfifo(systsprt2_pipe)
+            
+            # Write to SYSTSIN pipe
+            with open(systsin2_pipe, 'w') as f:
+                f.write(f"del temp.batchtso.dataset\n")
+            
+            # Write to SYSIN pipe
+            with open(sysin2_pipe, 'w') as f:
+                f.write("")  # Empty SYSIN
+            
+            # Execute deletion command
+            rc = execute_tso_command(
+                systsin_file=systsin2_pipe,
+                sysin_file=sysin2_pipe,
+                systsprt_file=systsprt2_pipe,
+                verbose=False
+            )
+            
+            # Verify return code is 0
+            self.assertEqual(rc, 0, f"Deletion command failed with RC={rc}")
+            
+            # Read and verify SYSTSPRT output contains expected deletion message
+            with open(systsprt2_pipe, 'r', encoding='ibm1047') as f:
+                output = f.read()
+                expected_msg = f"ENTRY (A) {self.test_dataset} DELETED"
+                self.assertIn(
+                    expected_msg,
+                    output,
+                    f"Expected '{expected_msg}' in SYSTSPRT output, but got: {output}"
+                )
+            
+        finally:
+            # Clean up named pipes
+            for pipe in [systsin_pipe, sysin_pipe, systsprt_pipe,
+                        systsin2_pipe, sysin2_pipe, systsprt2_pipe]:
+                if pipe and os.path.exists(pipe):
+                    os.unlink(pipe)
+    
     
     @classmethod
     def tearDownClass(cls):
