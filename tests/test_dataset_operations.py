@@ -155,6 +155,13 @@ class TestDatasetOperations(unittest.TestCase):
             stdout, stderr = proc.communicate(timeout=30)
             rc = proc.returncode
             
+            # If RC is non-zero, print diagnostic information
+            if rc != 0:
+                print(f"\n=== Allocation Command Failed with RC={rc} ===", file=sys.stderr)
+                print(f"STDOUT:\n{stdout.decode('utf-8', errors='replace')}", file=sys.stderr)
+                print(f"STDERR:\n{stderr.decode('utf-8', errors='replace')}", file=sys.stderr)
+                print(f"SYSTSPRT:\n{systsprt_output}", file=sys.stderr)
+            
             # Verify return code is 0
             self.assertEqual(rc, 0, f"Allocation command failed with RC={rc}")
             
@@ -197,6 +204,13 @@ class TestDatasetOperations(unittest.TestCase):
             # Wait for process to complete
             stdout2, stderr2 = proc2.communicate(timeout=30)
             rc = proc2.returncode
+            
+            # If RC is non-zero, print diagnostic information
+            if rc != 0:
+                print(f"\n=== Deletion Command Failed with RC={rc} ===", file=sys.stderr)
+                print(f"STDOUT:\n{stdout2.decode('utf-8', errors='replace')}", file=sys.stderr)
+                print(f"STDERR:\n{stderr2.decode('utf-8', errors='replace')}", file=sys.stderr)
+                print(f"SYSTSPRT:\n{systsprt2_output}", file=sys.stderr)
             
             # Verify return code is 0
             self.assertEqual(rc, 0, f"Deletion command failed with RC={rc}")
