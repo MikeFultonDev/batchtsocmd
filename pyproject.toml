@@ -31,7 +31,7 @@ keywords = ["zos", "tso", "mainframe", "ebcdic", "ikjeft1b"]
 requires-python = ">=3.8"
 dependencies = [
     "zoautil-py",
-    "zos-ccsid-converter",
+    "zos-ccsid-converter>=0.1.6",
 ]
 
 [project.optional-dependencies]

@@ -39,8 +39,8 @@ def convert_to_ebcdic(input_path: str, output_path: str, verbose: bool = False) 
         # Use the published zos-ccsid-converter package
         service = CodePageService(verbose=verbose)
         
-        # Convert file to EBCDIC
-        stats = service.convert_file(input_path, output_path, target_encoding='IBM-1047')
+        # Convert file to EBCDIC using convert_input interface
+        stats = service.convert_input(input_path, output_path, target_encoding='IBM-1047')
         
         if not stats['success']:
             print(f"ERROR: Failed to convert {input_path}: {stats.get('error_message', 'Unknown error')}",
