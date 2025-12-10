@@ -11,6 +11,25 @@ import stat
 import tempfile
 from zoautil_py import mvscmd
 from zoautil_py.ztypes import DDStatement, FileDefinition, DatasetDefinition
+
+# Check zos-ccsid-converter version
+try:
+    import zos_ccsid_converter
+    from packaging import version
+    
+    required_version = "0.1.8"
+    installed_version = getattr(zos_ccsid_converter, '__version__', '0.0.0')
+    
+    if version.parse(installed_version) < version.parse(required_version):
+        print(f"ERROR: zos-ccsid-converter version {required_version} or higher is required, "
+              f"but version {installed_version} is installed.", file=sys.stderr)
+        print(f"Please upgrade: pip install --upgrade 'zos-ccsid-converter>={required_version}'", file=sys.stderr)
+        sys.exit(1)
+except ImportError as e:
+    print(f"ERROR: Failed to import zos-ccsid-converter: {e}", file=sys.stderr)
+    print(f"Please install: pip install 'zos-ccsid-converter>=0.1.8'", file=sys.stderr)
+    sys.exit(1)
+
 from zos_ccsid_converter import CodePageService
 
 

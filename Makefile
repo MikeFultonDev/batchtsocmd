@@ -28,8 +28,8 @@ clean:
 	rm -rf *.egg-info
 	rm -rf src/*.egg-info
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-	find . -type f -name "*.pyc" -delete
-	find . -type f -name "*.pyo" -delete
+	find . -type f -name "*.pyc" -exec rm -f {} + 2>/dev/null || true
+	find . -type f -name "*.pyo" -exec rm -f {} + 2>/dev/null || true
 	@echo "Clean complete."
 
 build: clean
@@ -60,11 +60,14 @@ publish: build
 	@echo "Uploading to PyPI..."
 	@echo "Note: You need to have a PyPI account and API token configured."
 	@echo "WARNING: This will publish to the public PyPI repository!"
-	@read -p "Are you sure you want to publish to PyPI? [y/N] " -n 1 -r; \
-	echo; \
-	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-		$(TWINE) upload dist/*; \
-		echo "Upload to PyPI complete."; \
-	else \
-		echo "Publish cancelled."; \
-	fi
+	@echo "Are you sure you want to publish to PyPI? [y/N]"; \
+	read REPLY; \
+	case "$$REPLY" in \
+		[Yy]|[Yy][Ee][Ss]) \
+			$(TWINE) upload dist/*; \
+			echo "Upload to PyPI complete."; \
+			;; \
+		*) \
+			echo "Publish cancelled."; \
+			;; \
+	esac
