@@ -22,7 +22,8 @@ def is_named_pipe(path: str) -> bool:
         return False
 
 
-def convert_to_ebcdic(input_path: str, output_path: str, verbose: bool = False) -> bool:
+def convert_to_ebcdic(input_path: str, output_path: str,
+                     source_encoding: str | None = None, verbose: bool = False) -> bool:
     """
     Convert input file from ASCII to EBCDIC if needed using zos-ccsid-converter package.
     If already EBCDIC or untagged (assumed EBCDIC), copy as-is.
@@ -30,6 +31,7 @@ def convert_to_ebcdic(input_path: str, output_path: str, verbose: bool = False) 
     Args:
         input_path: Source file path
         output_path: Destination file path
+        source_encoding: Source encoding (ISO8859-1 or IBM-1047). Required for pipes, auto-detected for files.
         verbose: Enable verbose output
     
     Returns:
@@ -39,8 +41,9 @@ def convert_to_ebcdic(input_path: str, output_path: str, verbose: bool = False) 
         # Use the published zos-ccsid-converter package
         service = CodePageService(verbose=verbose)
         
-        # Convert file to EBCDIC using convert_input interface
-        stats = service.convert_input(input_path, output_path, target_encoding='IBM-1047')
+        stats = service.convert_input(input_path, output_path,
+                                      source_encoding=source_encoding,
+                                      target_encoding='IBM-1047')
         
         if not stats['success']:
             print(f"ERROR: Failed to convert {input_path}: {stats.get('error_message', 'Unknown error')}",
@@ -76,7 +79,9 @@ def validate_input_file(path: str, name: str) -> bool:
 def execute_tso_command(systsin_file: str, sysin_file: str,
                        systsprt_file: str | None = None,
                        sysprint_file: str | None = None,
-                       steplib: str | None = None, verbose: bool = False) -> int:
+                       steplib: str | None = None,
+                       source_encoding: str | None = None,
+                       verbose: bool = False) -> int:
     """
     Execute TSO command using IKJEFT1B with SYSTSIN and SYSIN inputs
     
@@ -86,6 +91,7 @@ def execute_tso_command(systsin_file: str, sysin_file: str,
         systsprt_file: Optional path to SYSTSPRT output file or named pipe (defaults to DUMMY)
         sysprint_file: Optional path to SYSPRINT output file or named pipe (defaults to stdout)
         steplib: Optional STEPLIB dataset name
+        source_encoding: Source encoding for pipe inputs (ISO8859-1 or IBM-1047). Required for pipes, auto-detected for files.
         verbose: Enable verbose output
     
     Returns:
@@ -117,14 +123,14 @@ def execute_tso_command(systsin_file: str, sysin_file: str,
         temp_systsin = tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix='.systsin')
         temp_systsin.close()
         
-        if not convert_to_ebcdic(systsin_file, temp_systsin.name, verbose):
+        if not convert_to_ebcdic(systsin_file, temp_systsin.name, source_encoding, verbose):
             return 8
         
         # Convert SYSIN to EBCDIC
         temp_sysin = tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix='.sysin')
         temp_sysin.close()
         
-        if not convert_to_ebcdic(sysin_file, temp_sysin.name, verbose):
+        if not convert_to_ebcdic(sysin_file, temp_sysin.name, source_encoding, verbose):
             return 8
         
         # Define DD statements for IKJEFT1B
@@ -233,17 +239,19 @@ Examples:
   batchtsocmd.py --systsin systsin.txt --sysin input.txt \\
                  --systsprt output.txt --sysprint print.txt
   
-  # Using named pipes
+  # Using named pipes (requires --source-encoding)
   mkfifo /tmp/systsin.pipe /tmp/sysin.pipe /tmp/systsprt.pipe /tmp/sysprint.pipe
   batchtsocmd.py --systsin /tmp/systsin.pipe --sysin /tmp/sysin.pipe \\
-                 --systsprt /tmp/systsprt.pipe --sysprint /tmp/sysprint.pipe
+                 --systsprt /tmp/systsprt.pipe --sysprint /tmp/sysprint.pipe \\
+                 --source-encoding IBM-1047
   
   # With STEPLIB and verbose output
   batchtsocmd.py --systsin systsin.txt --sysin input.txt \\
                  --steplib DB2V13.SDSNLOAD --verbose
 
 Note: Input files can be ASCII (ISO8859-1) or EBCDIC (IBM-1047).
-      Untagged files are assumed to be EBCDIC.
+      For regular files: encoding is auto-detected via file tags; untagged files are assumed to be EBCDIC.
+      For named pipes: you MUST specify --source-encoding (ISO8859-1 or IBM-1047) because z/OS pipes cannot store encoding metadata.
       Output files will be tagged as IBM-1047.
       If --systsprt is not specified, output goes to DUMMY.
       If --sysprint is not specified, output goes to stdout (tagged as IBM-1047).
@@ -278,6 +286,11 @@ Note: Input files can be ASCII (ISO8859-1) or EBCDIC (IBM-1047).
     )
     
     parser.add_argument(
+        '--source-encoding',
+        help='Source encoding for pipe inputs (ISO8859-1 or IBM-1047). Required for pipes, auto-detected for files.'
+    )
+    
+    parser.add_argument(
         '-v', '--verbose',
         action='store_true',
         help='Enable verbose output'
@@ -292,6 +305,7 @@ Note: Input files can be ASCII (ISO8859-1) or EBCDIC (IBM-1047).
         args.systsprt,
         args.sysprint,
         args.steplib,
+        args.source_encoding,
         args.verbose
     )
     

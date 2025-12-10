@@ -15,8 +15,14 @@ fi
 python3 -m pip install -e ".[dev]"
 rc=$?
 if [ $rc -gt 0 ]; then
+    echo "pip install failed. rc $rc" >&2
     exit $rc
 fi
 gmake test
 rc=$?
+if [ $rc -gt 0 ]; then
+    echo "gmake failed. rc $rc" >&2
+else
+    echo "gmake succeeded."
+fi
 exit $rc

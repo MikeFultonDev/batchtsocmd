@@ -48,10 +48,13 @@ batchtsocmd --systsin systsin.txt --sysin input.txt \
 
 ### Using Named Pipes
 
+**Important:** When using named pipes, you must specify the `--source-encoding` parameter because z/OS pipes cannot store encoding metadata.
+
 ```bash
 mkfifo /tmp/systsin.pipe /tmp/sysin.pipe /tmp/systsprt.pipe /tmp/sysprint.pipe
 batchtsocmd --systsin /tmp/systsin.pipe --sysin /tmp/sysin.pipe \
-            --systsprt /tmp/systsprt.pipe --sysprint /tmp/sysprint.pipe
+            --systsprt /tmp/systsprt.pipe --sysprint /tmp/sysprint.pipe \
+            --source-encoding IBM-1047
 ```
 
 ### With STEPLIB and Verbose Output
@@ -68,12 +71,14 @@ batchtsocmd --systsin systsin.txt --sysin input.txt \
 - `--systsprt PATH` - Path to SYSTSPRT output file or named pipe (optional, defaults to DUMMY)
 - `--sysprint PATH` - Path to SYSPRINT output file or named pipe (optional, defaults to stdout)
 - `--steplib DATASET` - Optional STEPLIB dataset name (e.g., DB2V13.SDSNLOAD)
+- `--source-encoding ENCODING` - Source encoding for pipe inputs: `ISO8859-1` or `IBM-1047` (required for pipes, auto-detected for files)
 - `-v, --verbose` - Enable verbose output
 
 ## Notes
 
 - Input files can be ASCII (ISO8859-1) or EBCDIC (IBM-1047)
-- Untagged files are assumed to be EBCDIC
+- For regular files: encoding is auto-detected via file tags; untagged files are assumed to be EBCDIC
+- For named pipes: you **must** specify `--source-encoding` because z/OS pipes cannot store encoding metadata
 - Output files will be tagged as IBM-1047
 - If --systsprt is not specified, output goes to DUMMY
 - If --sysprint is not specified, output goes to stdout (tagged as IBM-1047)
