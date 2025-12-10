@@ -2,7 +2,7 @@
 batchtsocmd - Execute TSO commands via IKJEFT1B with encoding conversion
 """
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 __author__ = "Mike Fulton"
 
 from .main import execute_tso_command, main
