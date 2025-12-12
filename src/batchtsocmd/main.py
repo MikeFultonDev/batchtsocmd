@@ -71,6 +71,45 @@ def convert_to_ebcdic(input_path: str, output_path: str, verbose: bool = False) 
         return False
 
 
+def pad_sysin_to_80_bytes(input_path: str, output_path: str, verbose: bool = False) -> bool:
+    """
+    Pad each line in SYSIN file to exactly 80 bytes.
+    
+    Args:
+        input_path: Source SYSIN file path
+        output_path: Destination padded file path
+        verbose: Enable verbose output
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        with open(input_path, 'r', encoding='utf-8', errors='replace') as infile:
+            with open(output_path, 'w', encoding='utf-8') as outfile:
+                for line_num, line in enumerate(infile, 1):
+                    # Remove any trailing newline/whitespace
+                    line = line.rstrip('\r\n')
+                    
+                    # Truncate if longer than 80 bytes
+                    if len(line) > 80:
+                        if verbose:
+                            print(f"Warning: Line {line_num} truncated from {len(line)} to 80 bytes")
+                        line = line[:80]
+                    
+                    # Pad to exactly 80 bytes
+                    padded_line = line.ljust(80)
+                    outfile.write(padded_line + '\n')
+        
+        if verbose:
+            print(f"Padded SYSIN file to 80-byte records: {output_path}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"ERROR: Failed to pad SYSIN file: {e}", file=sys.stderr)
+        return False
+
+
 def validate_input_file(path: str, name: str) -> bool:
     """Validate that input file exists and is readable"""
     if not os.path.exists(path):
@@ -85,8 +124,8 @@ def validate_input_file(path: str, name: str) -> bool:
 
 
 def execute_tso_command(systsin_file: str, sysin_file: str,
-                       systsprt_file: str | None = None,
-                       sysprint_file: str | None = None,
+                       systsprt_file: str = 'stdout',
+                       sysprint_file: str = 'stdout',
                        steplib: str | None = None,
                        verbose: bool = False) -> int:
     """
@@ -95,8 +134,8 @@ def execute_tso_command(systsin_file: str, sysin_file: str,
     Args:
         systsin_file: Path to SYSTSIN input file
         sysin_file: Path to SYSIN input file
-        systsprt_file: Optional path to SYSTSPRT output file (defaults to DUMMY)
-        sysprint_file: Optional path to SYSPRINT output file (defaults to stdout)
+        systsprt_file: Path to SYSTSPRT output file or 'stdout' (defaults to 'stdout')
+        sysprint_file: Path to SYSPRINT output file or 'stdout' (defaults to 'stdout')
         steplib: Optional STEPLIB dataset name
         verbose: Enable verbose output
     
@@ -118,6 +157,8 @@ def execute_tso_command(systsin_file: str, sysin_file: str,
     # Create temporary files for EBCDIC conversion
     temp_systsin = None
     temp_sysin = None
+    temp_sysin_padded = None
+    temp_systsprt = None
     temp_sysprint = None
     
     try:
@@ -128,11 +169,17 @@ def execute_tso_command(systsin_file: str, sysin_file: str,
         if not convert_to_ebcdic(systsin_file, temp_systsin.name, verbose):
             return 8
         
-        # Convert SYSIN to EBCDIC
+        # Pad SYSIN to 80 bytes per line, then convert to EBCDIC
+        temp_sysin_padded = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.sysin.padded')
+        temp_sysin_padded.close()
+        
+        if not pad_sysin_to_80_bytes(sysin_file, temp_sysin_padded.name, verbose):
+            return 8
+        
         temp_sysin = tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix='.sysin')
         temp_sysin.close()
         
-        if not convert_to_ebcdic(sysin_file, temp_sysin.name, verbose):
+        if not convert_to_ebcdic(temp_sysin_padded.name, temp_sysin.name, verbose):
             return 8
         
         # Define DD statements for IKJEFT1B
@@ -144,30 +191,38 @@ def execute_tso_command(systsin_file: str, sysin_file: str,
             if verbose:
                 print(f"STEPLIB: {steplib}")
         
-        # Add SYSTSPRT - use DUMMY if not specified
-        if systsprt_file:
-            dds.append(DDStatement('SYSTSPRT', FileDefinition(f"{systsprt_file},lrecl=80,recfm=FB")))
-        else:
-            dds.append(DDStatement('SYSTSPRT', FileDefinition('DUMMY')))
+        # Add SYSTSPRT - use temp file if stdout, otherwise use specified file
+        if systsprt_file == 'stdout':
+            # Create a temporary file for SYSTSPRT output
+            # We'll read this and write to stdout after execution
+            temp_systsprt = tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix='.systsprt')
+            temp_systsprt.close()
+            os.system(f"chtag -tc IBM-1047 {temp_systsprt.name}")
+            dds.append(DDStatement('SYSTSPRT', FileDefinition(f"{temp_systsprt.name},recfm=FB")))
             if verbose:
-                print("SYSTSPRT: DUMMY")
+                print(f"SYSTSPRT: temporary file (will copy to stdout)")
+        else:
+            dds.append(DDStatement('SYSTSPRT', FileDefinition(f"{systsprt_file},recfm=FB")))
+            if verbose:
+                print(f"SYSTSPRT: {systsprt_file}")
         
         # Add SYSTSIN
         dds.append(DDStatement('SYSTSIN', FileDefinition(f"{temp_systsin.name},lrecl=80,recfm=FB")))
         
-        # Add SYSPRINT - if not specified, write to temp file then copy to stdout
-        # (Z Open Automation Utilities requires a real file, cannot write directly to stdout)
-        if sysprint_file:
-            dds.append(DDStatement('SYSPRINT', FileDefinition(f"{sysprint_file},lrecl=80,recfm=FB")))
-        else:
+        # Add SYSPRINT - use temp file if stdout, otherwise use specified file
+        if sysprint_file == 'stdout':
             # Create a temporary file for SYSPRINT output
             # We'll read this and write to stdout after execution
             temp_sysprint = tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix='.sysprint')
             temp_sysprint.close()
             os.system(f"chtag -tc IBM-1047 {temp_sysprint.name}")
-            dds.append(DDStatement('SYSPRINT', FileDefinition(f"{temp_sysprint.name},lrecl=80,recfm=FB")))
+            dds.append(DDStatement('SYSPRINT', FileDefinition(f"{temp_sysprint.name},recfm=FB")))
             if verbose:
                 print(f"SYSPRINT: temporary file (will copy to stdout)")
+        else:
+            dds.append(DDStatement('SYSPRINT', FileDefinition(f"{sysprint_file},recfm=FB")))
+            if verbose:
+                print(f"SYSPRINT: {sysprint_file}")
         
         # Add remaining DD statements
         dds.extend([
@@ -189,11 +244,28 @@ def execute_tso_command(systsin_file: str, sysin_file: str,
             verbose=verbose
         )
         
-        # If SYSPRINT was sent to temp file (stdout), read and print it
-        if not sysprint_file and temp_sysprint:
+        # Output to stdout in correct order: SYSTSPRT first, then SYSPRINT
+        # 1. SYSTSPRT output (if stdout was requested)
+        if systsprt_file == 'stdout' and temp_systsprt:
+            try:
+                with open(temp_systsprt.name, 'r', encoding='ibm1047') as f:
+                    content = f.read()
+                    if content:  # Only print if there's content
+                        print(content, end='')
+            except Exception as e:
+                if verbose:
+                    print(f"Warning: Could not read SYSTSPRT output: {e}", file=sys.stderr)
+            finally:
+                if os.path.exists(temp_systsprt.name):
+                    os.unlink(temp_systsprt.name)
+        
+        # 2. SYSPRINT output (if stdout was requested)
+        if sysprint_file == 'stdout' and temp_sysprint:
             try:
                 with open(temp_sysprint.name, 'r', encoding='ibm1047') as f:
-                    print(f.read())
+                    content = f.read()
+                    if content:  # Only print if there's content
+                        print(content, end='')
             except Exception as e:
                 if verbose:
                     print(f"Warning: Could not read SYSPRINT output: {e}", file=sys.stderr)
@@ -204,13 +276,13 @@ def execute_tso_command(systsin_file: str, sysin_file: str,
         if verbose or response.rc != 0:
             print(f"\nReturn code: {response.rc}")
         
-        # Tag output files as IBM-1047
-        if systsprt_file:
+        # Tag output files as IBM-1047 (only for actual files, not stdout)
+        if systsprt_file != 'stdout':
             os.system(f"chtag -tc IBM-1047 {systsprt_file}")
             if verbose:
                 print(f"Tagged {systsprt_file} as IBM-1047")
         
-        if sysprint_file:
+        if sysprint_file != 'stdout':
             os.system(f"chtag -tc IBM-1047 {sysprint_file}")
             if verbose:
                 print(f"Tagged {sysprint_file} as IBM-1047")
@@ -225,8 +297,16 @@ def execute_tso_command(systsin_file: str, sysin_file: str,
         # Clean up temporary files
         if temp_systsin and os.path.exists(temp_systsin.name):
             os.unlink(temp_systsin.name)
+        if temp_sysin_padded and os.path.exists(temp_sysin_padded.name):
+            os.unlink(temp_sysin_padded.name)
         if temp_sysin and os.path.exists(temp_sysin.name):
             os.unlink(temp_sysin.name)
+        # Note: temp_systsprt and temp_sysprint are cleaned up in the main try block
+        # after reading their contents, but we check here in case of early exit
+        if temp_systsprt and os.path.exists(temp_systsprt.name):
+            os.unlink(temp_systsprt.name)
+        if temp_sysprint and os.path.exists(temp_sysprint.name):
+            os.unlink(temp_sysprint.name)
 
 
 def main():
@@ -236,7 +316,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Basic usage
+  # Basic usage (both SYSTSPRT and SYSPRINT go to stdout)
   batchtsocmd.py --systsin systsin.txt --sysin input.txt
   
   # With output files
@@ -250,8 +330,8 @@ Examples:
 Note: Input files can be ASCII (ISO8859-1) or EBCDIC (IBM-1047).
       Encoding is auto-detected via file tags; untagged files are assumed to be EBCDIC.
       Output files will be tagged as IBM-1047.
-      If --systsprt is not specified, output goes to DUMMY.
-      If --sysprint is not specified, output goes to stdout (tagged as IBM-1047).
+      Both --systsprt and --sysprint default to 'stdout'.
+      When stdout is used, SYSTSPRT output is written first, then SYSPRINT output.
 """
     )
     
@@ -269,12 +349,14 @@ Note: Input files can be ASCII (ISO8859-1) or EBCDIC (IBM-1047).
     
     parser.add_argument(
         '--systsprt',
-        help='Path to SYSTSPRT output file (defaults to DUMMY)'
+        default='stdout',
+        help="Path to SYSTSPRT output file or 'stdout' (default: stdout)"
     )
     
     parser.add_argument(
         '--sysprint',
-        help='Path to SYSPRINT output file (defaults to stdout, tagged as IBM-1047)'
+        default='stdout',
+        help="Path to SYSPRINT output file or 'stdout' (default: stdout)"
     )
     
     parser.add_argument(

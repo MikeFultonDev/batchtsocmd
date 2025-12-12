@@ -127,12 +127,12 @@ class TestDatasetOperations(unittest.TestCase):
                 sysin.write("")  # Empty SYSIN
                 sysin_path = sysin.name
             
-            # Execute allocation command with SYSPRINT to stdout (no sysprint_file specified)
+            # Execute allocation command with SYSPRINT to stdout
             # This tests the temporary file -> stdout mechanism
             rc = execute_tso_command(
                 systsin_file=systsin_path,
                 sysin_file=sysin_path,
-                sysprint_file=None,  # Explicitly None to use stdout
+                sysprint_file='stdout',  # Use stdout
                 verbose=False
             )
             
@@ -152,7 +152,7 @@ class TestDatasetOperations(unittest.TestCase):
             rc = execute_tso_command(
                 systsin_file=systsin2_path,
                 sysin_file=sysin2_path,
-                sysprint_file=None,  # Explicitly None to use stdout
+                sysprint_file='stdout',  # Use stdout
                 verbose=False
             )
             
