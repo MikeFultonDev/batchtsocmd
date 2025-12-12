@@ -146,31 +146,33 @@ def execute_tso_command(systsin_file: str, sysin_file: str,
         
         # Add SYSTSPRT - use DUMMY if not specified
         if systsprt_file:
-            dds.append(DDStatement('SYSTSPRT', FileDefinition(systsprt_file + ",lrecl=80,recfm=FB")))
+            dds.append(DDStatement('SYSTSPRT', FileDefinition(f"{systsprt_file},lrecl=80,recfm=FB")))
         else:
             dds.append(DDStatement('SYSTSPRT', FileDefinition('DUMMY')))
             if verbose:
                 print("SYSTSPRT: DUMMY")
         
         # Add SYSTSIN
-        dds.append(DDStatement('SYSTSIN', FileDefinition(temp_systsin.name + ",lrecl=80,recfm=FB")))
+        dds.append(DDStatement('SYSTSIN', FileDefinition(f"{temp_systsin.name},lrecl=80,recfm=FB")))
         
-        # Add SYSPRINT - use stdout if not specified, tagged as IBM-1047
+        # Add SYSPRINT - if not specified, write to temp file then copy to stdout
+        # (Z Open Automation Utilities requires a real file, cannot write directly to stdout)
         if sysprint_file:
-            dds.append(DDStatement('SYSPRINT', FileDefinition(sysprint_file + ",lrecl=80,recfm=FB")))
+            dds.append(DDStatement('SYSPRINT', FileDefinition(f"{sysprint_file},lrecl=80,recfm=FB")))
         else:
-            # Create a temporary file for stdout that will be tagged
+            # Create a temporary file for SYSPRINT output
+            # We'll read this and write to stdout after execution
             temp_sysprint = tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix='.sysprint')
             temp_sysprint.close()
             os.system(f"chtag -tc IBM-1047 {temp_sysprint.name}")
-            dds.append(DDStatement('SYSPRINT', FileDefinition(temp_sysprint.name + ",lrecl=80,recfm=FB")))
+            dds.append(DDStatement('SYSPRINT', FileDefinition(f"{temp_sysprint.name},lrecl=80,recfm=FB")))
             if verbose:
-                print("SYSPRINT: stdout (tagged as IBM-1047)")
+                print(f"SYSPRINT: temporary file (will copy to stdout)")
         
         # Add remaining DD statements
         dds.extend([
             DDStatement('SYSUDUMP', FileDefinition('DUMMY')),
-            DDStatement('SYSIN', FileDefinition(temp_sysin.name + ",lrecl=80,recfm=FB"))
+            DDStatement('SYSIN', FileDefinition(f"{temp_sysin.name},lrecl=80,recfm=FB"))
         ])
         
         if verbose:
