@@ -126,7 +126,8 @@ def validate_input_file(path: str, name: str) -> bool:
 def execute_tso_command(systsin_file: str, sysin_file: str,
                        systsprt_file: str = 'stdout',
                        sysprint_file: str = 'stdout',
-                       steplib: str | None = None,
+                       steplib: str | list[str] | None = None,
+                       dbrmlib: str | list[str] | None = None,
                        verbose: bool = False) -> int:
     """
     Execute TSO command using IKJEFT1B with SYSTSIN and SYSIN inputs
@@ -136,7 +137,8 @@ def execute_tso_command(systsin_file: str, sysin_file: str,
         sysin_file: Path to SYSIN input file
         systsprt_file: Path to SYSTSPRT output file or 'stdout' (defaults to 'stdout')
         sysprint_file: Path to SYSPRINT output file or 'stdout' (defaults to 'stdout')
-        steplib: Optional STEPLIB dataset name
+        steplib: Optional STEPLIB dataset name(s) - single string or list of strings for concatenation
+        dbrmlib: Optional DBRMLIB dataset name(s) - single string or list of strings for concatenation
         verbose: Enable verbose output
     
     Returns:
@@ -185,11 +187,25 @@ def execute_tso_command(systsin_file: str, sysin_file: str,
         # Define DD statements for IKJEFT1B
         dds = []
         
-        # Add STEPLIB if specified
+        # Add STEPLIB if specified (supports concatenation)
         if steplib:
-            dds.append(DDStatement('STEPLIB', DatasetDefinition(steplib)))
+            # Convert single string to list for uniform processing
+            steplib_list = [steplib] if isinstance(steplib, str) else steplib
+            # Create concatenated dataset definition
+            steplib_defs = [DatasetDefinition(ds) for ds in steplib_list]
+            dds.append(DDStatement('STEPLIB', steplib_defs))
             if verbose:
-                print(f"STEPLIB: {steplib}")
+                print(f"STEPLIB: {':'.join(steplib_list)}")
+        
+        # Add DBRMLIB if specified (supports concatenation)
+        if dbrmlib:
+            # Convert single string to list for uniform processing
+            dbrmlib_list = [dbrmlib] if isinstance(dbrmlib, str) else dbrmlib
+            # Create concatenated dataset definition
+            dbrmlib_defs = [DatasetDefinition(ds) for ds in dbrmlib_list]
+            dds.append(DDStatement('DBRMLIB', dbrmlib_defs))
+            if verbose:
+                print(f"DBRMLIB: {':'.join(dbrmlib_list)}")
         
         # Add SYSTSPRT - use temp file if stdout, otherwise use specified file
         if systsprt_file == 'stdout':
@@ -326,6 +342,14 @@ Examples:
   # With STEPLIB and verbose output
   batchtsocmd.py --systsin systsin.txt --sysin input.txt \\
                  --steplib DB2V13.SDSNLOAD --verbose
+  
+  # With STEPLIB and DBRMLIB
+  batchtsocmd.py --systsin systsin.txt --sysin input.txt \\
+                 --steplib DB2V13.SDSNLOAD --dbrmlib DB2V13.DBRMLIB
+  
+  # With concatenated STEPLIB datasets
+  batchtsocmd.py --systsin systsin.txt --sysin input.txt \\
+                 --steplib DB2V13.SDSNLOAD:DB2V13.SDSNLOD2
 
 Note: Input files can be ASCII (ISO8859-1) or EBCDIC (IBM-1047).
       Encoding is auto-detected via file tags; untagged files are assumed to be EBCDIC.
@@ -361,7 +385,12 @@ Note: Input files can be ASCII (ISO8859-1) or EBCDIC (IBM-1047).
     
     parser.add_argument(
         '--steplib',
-        help='Optional STEPLIB dataset name (e.g., DB2V13.SDSNLOAD)'
+        help='Optional STEPLIB dataset name(s). Use colon to concatenate multiple datasets (e.g., DB2V13.SDSNLOAD or DB2V13.SDSNLOAD:DB2V13.SDSNLOD2)'
+    )
+    
+    parser.add_argument(
+        '--dbrmlib',
+        help='Optional DBRMLIB dataset name(s). Use colon to concatenate multiple datasets (e.g., DB2V13.DBRMLIB or DB2V13.DBRMLIB:DB2V13.DBRMLI2)'
     )
     
     parser.add_argument(
@@ -372,13 +401,18 @@ Note: Input files can be ASCII (ISO8859-1) or EBCDIC (IBM-1047).
     
     args = parser.parse_args()
     
+    # Parse steplib and dbrmlib arguments (support colon-separated concatenation)
+    steplib_list = args.steplib.split(':') if args.steplib else None
+    dbrmlib_list = args.dbrmlib.split(':') if args.dbrmlib else None
+    
     # Execute the TSO command
     rc = execute_tso_command(
         args.systsin,
         args.sysin,
         args.systsprt,
         args.sysprint,
-        args.steplib,
+        steplib_list,
+        dbrmlib_list,
         args.verbose
     )
     

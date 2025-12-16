@@ -11,6 +11,7 @@ Run TSO commands via IKJEFT1B with automatic encoding conversion.
 - Execute TSO commands via IKJEFT1B
 - Automatic ASCII to EBCDIC conversion for input files
 - Optional STEPLIB support
+- Optional DBRMLIB support
 - Configurable output destinations (SYSTSPRT, SYSPRINT)
 - Verbose mode for debugging
 
@@ -52,13 +53,36 @@ batchtsocmd --systsin systsin.txt --sysin input.txt \
             --steplib DB2V13.SDSNLOAD --verbose
 ```
 
+### With STEPLIB and DBRMLIB
+
+```bash
+batchtsocmd --systsin systsin.txt --sysin input.txt \
+            --steplib DB2V13.SDSNLOAD --dbrmlib DB2V13.DBRMLIB
+```
+
+### With Concatenated STEPLIB Datasets
+
+```bash
+batchtsocmd --systsin systsin.txt --sysin input.txt \
+            --steplib DB2V13.SDSNLOAD:DB2V13.SDSNLOD2:DB2V13.SDSNLOD3
+```
+
+### With Concatenated STEPLIB and DBRMLIB Datasets
+
+```bash
+batchtsocmd --systsin systsin.txt --sysin input.txt \
+            --steplib DB2V13.SDSNLOAD:DB2V13.SDSNLOD2 \
+            --dbrmlib DB2V13.DBRMLIB:DB2V13.DBRMLI2
+```
+
 ## Command Line Options
 
 - `--systsin PATH` - Path to SYSTSIN input file (required)
 - `--sysin PATH` - Path to SYSIN input file (required)
 - `--systsprt PATH` - Path to SYSTSPRT output file or 'stdout' (optional, defaults to stdout)
 - `--sysprint PATH` - Path to SYSPRINT output file or 'stdout' (optional, defaults to stdout)
-- `--steplib DATASET` - Optional STEPLIB dataset name (e.g., DB2V13.SDSNLOAD)
+- `--steplib DATASET` - Optional STEPLIB dataset name(s). Use colon (`:`) to concatenate multiple datasets (e.g., `DB2V13.SDSNLOAD` or `DB2V13.SDSNLOAD:DB2V13.SDSNLOD2`)
+- `--dbrmlib DATASET` - Optional DBRMLIB dataset name(s). Use colon (`:`) to concatenate multiple datasets (e.g., `DB2V13.DBRMLIB` or `DB2V13.DBRMLIB:DB2V13.DBRMLI2`)
 - `-v, --verbose` - Enable verbose output
 
 ## Notes
