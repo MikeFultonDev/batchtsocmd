@@ -325,6 +325,119 @@ def execute_tso_command(systsin_file: str, sysin_file: str,
             os.unlink(temp_sysprint.name)
 
 
+def db2cmd(
+    sysin_content: str | None = None,
+    sysin_file: str | None = None,
+    system: str | None = None,
+    plan: str | None = None,
+    toollib: str | None = None,
+    dbrmlib: str | list[str] | None = None,
+    steplib: str | list[str] | None = None,
+    systsprt_file: str = 'stdout',
+    sysprint_file: str = 'stdout',
+    verbose: bool = False
+) -> int:
+    """
+    Execute Db2 commands using DSNTEP2 via IKJEFT1B
+    
+    Args:
+        sysin_content: SQL commands as a string (mutually exclusive with sysin_file)
+        sysin_file: Path to file containing SQL commands (mutually exclusive with sysin_content)
+        system: Db2 subsystem ID (required)
+        plan: Db2 plan name (required)
+        toollib: Db2 tool library (required)
+        dbrmlib: Optional DBRMLIB dataset name(s) - single string or list for concatenation
+        steplib: Optional STEPLIB dataset name(s) - single string or list for concatenation
+        systsprt_file: Path to SYSTSPRT output file or 'stdout' (defaults to 'stdout')
+        sysprint_file: Path to SYSPRINT output file or 'stdout' (defaults to 'stdout')
+        verbose: Enable verbose output
+    
+    Returns:
+        Return code from IKJEFT1B execution
+    """
+    
+    # Validate that exactly one of sysin_content or sysin_file is provided
+    if sysin_content is not None and sysin_file is not None:
+        print("ERROR: Cannot specify both sysin_content and sysin_file", file=sys.stderr)
+        return 8
+    
+    if sysin_content is None and sysin_file is None:
+        print("ERROR: Must specify either sysin_content or sysin_file", file=sys.stderr)
+        return 8
+    
+    # Validate required parameters
+    if system is None:
+        print("ERROR: system parameter is required", file=sys.stderr)
+        return 8
+    
+    if plan is None:
+        print("ERROR: plan parameter is required", file=sys.stderr)
+        return 8
+    
+    if toollib is None:
+        print("ERROR: toollib parameter is required", file=sys.stderr)
+        return 8
+    
+    # Create temporary files
+    temp_systsin = None
+    temp_sysin = None
+    
+    try:
+        # Generate SYSTSIN content with DSN commands
+        systsin_content = f"""  DSN SYSTEM({system})
+  RUN PROGRAM(DSNTEP2) PLAN({plan}) -
+       LIB('{toollib}') PARMS('/ALIGN(MID)')
+  END
+"""
+        
+        if verbose:
+            print(f"Generated SYSTSIN content:")
+            print(systsin_content)
+        
+        # Create temporary SYSTSIN file
+        temp_systsin = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.systsin')
+        temp_systsin.write(systsin_content)
+        temp_systsin.close()
+        
+        # Handle SYSIN input
+        if sysin_content is not None:
+            # Create temporary SYSIN file from content
+            temp_sysin = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.sysin')
+            temp_sysin.write(sysin_content)
+            temp_sysin.close()
+            sysin_path = temp_sysin.name
+        else:
+            # Use provided file (we know it's not None due to validation above)
+            sysin_path = sysin_file  # type: ignore
+        
+        if verbose:
+            print(f"SYSIN source: {'content string' if sysin_content else sysin_file}")
+        
+        # Execute the TSO command
+        rc = execute_tso_command(
+            systsin_file=temp_systsin.name,
+            sysin_file=sysin_path,  # type: ignore
+            systsprt_file=systsprt_file,
+            sysprint_file=sysprint_file,
+            steplib=steplib,
+            dbrmlib=dbrmlib,
+            verbose=verbose
+        )
+        
+        return rc
+        
+    except Exception as e:
+        print(f"ERROR: Failed to execute Db2 command: {e}", file=sys.stderr)
+        return 16
+        
+    finally:
+        # Clean up temporary files
+        if temp_systsin and os.path.exists(temp_systsin.name):
+            os.unlink(temp_systsin.name)
+        if temp_sysin and os.path.exists(temp_sysin.name):
+            os.unlink(temp_sysin.name)
+
+
 def main():
     """Main entry point"""
     parser = argparse.ArgumentParser(

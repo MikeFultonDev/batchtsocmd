@@ -1,18 +1,25 @@
 # batchtsocmd
 
-Run TSO commands via IKJEFT1B with automatic encoding conversion.
+Run TSO and Db2 commands via IKJEFT1B with automatic encoding conversion.
 
 ## Description
 
 `batchtsocmd` is a Python utility for z/OS that executes TSO commands through IKJEFT1B with automatic ASCII/EBCDIC encoding conversion. It handles SYSIN and SYSTSIN inputs from files, automatically converting them to EBCDIC as needed.
 
+The package includes two main commands:
+- `batchtsocmd` - General TSO command execution
+- `db2` - Simplified Db2 command execution via DSNTEP2
+
 ## Features
 
 - Execute TSO commands via IKJEFT1B
+- Execute Db2 SQL commands via DSNTEP2
 - Automatic ASCII to EBCDIC conversion for input files
 - Optional STEPLIB support
 - Optional DBRMLIB support
 - Configurable output destinations (SYSTSPRT, SYSPRINT)
+- Environment variable support for Db2 parameters
+- Stdin piping support for SQL commands
 - Verbose mode for debugging
 
 ## Requirements
@@ -33,7 +40,9 @@ pip install batchtsocmd
 
 ## Usage
 
-### Basic Usage
+### batchtsocmd - General TSO Command Execution
+
+#### Basic Usage
 
 ```bash
 batchtsocmd --systsin systsin.txt --sysin input.txt
@@ -75,7 +84,7 @@ batchtsocmd --systsin systsin.txt --sysin input.txt \
             --dbrmlib DB2V13.DBRMLIB:DB2V13.DBRMLI2
 ```
 
-## Command Line Options
+#### Command Line Options
 
 - `--systsin PATH` - Path to SYSTSIN input file (required)
 - `--sysin PATH` - Path to SYSIN input file (required)
@@ -85,13 +94,123 @@ batchtsocmd --systsin systsin.txt --sysin input.txt \
 - `--dbrmlib DATASET` - Optional DBRMLIB dataset name(s). Use colon (`:`) to concatenate multiple datasets (e.g., `DB2V13.DBRMLIB` or `DB2V13.DBRMLIB:DB2V13.DBRMLI2`)
 - `-v, --verbose` - Enable verbose output
 
-## Notes
+#### Notes
 
 - Input files can be ASCII (ISO8859-1) or EBCDIC (IBM-1047)
 - Encoding is auto-detected via file tags; untagged files are assumed to be EBCDIC
 - Output files will be tagged as IBM-1047
 - Both --systsprt and --sysprint default to 'stdout'
 - When stdout is used, SYSTSPRT output is written first, then SYSPRINT output
+
+### db2 - Db2 Command Execution
+
+The `db2` command provides a simplified interface for executing Db2 SQL commands via DSNTEP2.
+
+#### Basic Usage
+
+```bash
+# Using command line options
+db2 --system DB2P --plan DSNTEP12 --toollib DSNC10.DBCG.RUNLIB.LOAD \
+    --sysin query.sql
+
+# Using environment variables
+export DB2_SYSTEM=DB2P
+export DB2_PLAN=DSNTEP12
+export DB2_TOOLLIB=DSNC10.DBCG.RUNLIB.LOAD
+db2 --sysin query.sql
+
+# Using stdin pipe
+echo "SELECT * FROM SYSIBM.SYSTABLES;" | db2 --system DB2P \
+    --plan DSNTEP12 --toollib DSNC10.DBCG.RUNLIB.LOAD
+
+# With STEPLIB
+db2 --system DB2P --plan DSNTEP12 --toollib DSNC10.DBCG.RUNLIB.LOAD \
+    --sysin query.sql --steplib DB2V13.SDSNLOAD
+
+# With DBRMLIB directory
+db2 --system DB2P --plan DSNTEP12 --toollib DSNC10.DBCG.RUNLIB.LOAD \
+    --sysin query.sql --dbrmlib /u/myuser/dbrmlib
+
+# With concatenated STEPLIB datasets
+db2 --system DB2P --plan DSNTEP12 --toollib DSNC10.DBCG.RUNLIB.LOAD \
+    --sysin query.sql --steplib DB2V13.SDSNLOAD:DB2V13.SDSNLOD2
+```
+
+#### Command Line Options
+
+- `--system ID` - Db2 subsystem ID (or set `DB2_SYSTEM` env var) (required)
+- `--plan NAME` - Db2 plan name (or set `DB2_PLAN` env var) (required)
+- `--toollib LIB` - Db2 tool library (or set `DB2_TOOLLIB` env var) (required)
+- `--sysin PATH` - Path to SYSIN input file (optional, reads from stdin if not specified)
+- `--systsprt PATH` - Path to SYSTSPRT output file or 'stdout' (optional, defaults to stdout)
+- `--sysprint PATH` - Path to SYSPRINT output file or 'stdout' (optional, defaults to stdout)
+- `--steplib DATASET` - Optional STEPLIB dataset name(s). Use colon (`:`) to concatenate multiple datasets
+- `--dbrmlib DATASET` - Optional DBRMLIB dataset name(s) or directory (or set `DB2_DBRMLIB` env var). Use colon (`:`) to concatenate multiple datasets
+- `-v, --verbose` - Enable verbose output
+
+#### Environment Variables
+
+- `DB2_SYSTEM` - Default Db2 subsystem ID
+- `DB2_PLAN` - Default Db2 plan name
+- `DB2_TOOLLIB` - Default Db2 tool library
+- `DB2_DBRMLIB` - Default DBRMLIB dataset or directory
+
+**Note:** Command line options override environment variables.
+
+#### DBRMLIB Handling
+
+The `--dbrmlib` option (or `DB2_DBRMLIB` environment variable) can specify:
+- A dataset name (no slash): `DB2V13.DBRMLIB`
+- Multiple datasets (colon-separated): `DB2V13.DBRMLIB:DB2V13.DBRMLI2`
+- A directory path (contains slash): `/u/myuser/dbrmlib`
+  - When a directory is specified, the command scans for `.dbm` files and uses them as datasets
+
+#### Notes
+
+- Input can be from a file (`--sysin`) or stdin (pipe)
+- SQL commands are automatically padded to 80 bytes per line
+- Output files will be tagged as IBM-1047
+- Both `--systsprt` and `--sysprint` default to 'stdout'
+- When stdout is used, SYSTSPRT output is written first, then SYSPRINT output
+
+### Python API
+
+You can also use the `db2cmd` function directly in Python:
+
+```python
+from batchtsocmd.main import db2cmd
+
+# Using content string
+rc = db2cmd(
+    sysin_content="SELECT * FROM SYSIBM.SYSTABLES;",
+    system="DB2P",
+    plan="DSNTEP12",
+    toollib="DSNC10.DBCG.RUNLIB.LOAD",
+    steplib="DB2V13.SDSNLOAD",
+    verbose=True
+)
+
+# Using file
+rc = db2cmd(
+    sysin_file="query.sql",
+    system="DB2P",
+    plan="DSNTEP12",
+    toollib="DSNC10.DBCG.RUNLIB.LOAD"
+)
+```
+
+#### db2cmd Parameters
+
+- `sysin_content` - SQL commands as a string (mutually exclusive with sysin_file)
+- `sysin_file` - Path to file containing SQL commands (mutually exclusive with sysin_content)
+- `system` - Db2 subsystem ID (required)
+- `plan` - Db2 plan name (required)
+- `toollib` - Db2 tool library (required)
+- `dbrmlib` - Optional DBRMLIB dataset(s) - single string or list for concatenation
+- `steplib` - Optional STEPLIB dataset(s) - single string or list for concatenation
+- `systsprt_file` - Output destination for SYSTSPRT (default: 'stdout')
+- `sysprint_file` - Output destination for SYSPRINT (default: 'stdout')
+- `verbose` - Enable verbose output
 
 ## License
 

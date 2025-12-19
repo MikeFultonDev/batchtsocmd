@@ -1,12 +1,12 @@
 """
-batchtsocmd - Execute TSO commands via IKJEFT1B with encoding conversion
+batchtsocmd - Execute TSO and Db2 commands via IKJEFT1B with encoding conversion
 """
 
-__version__ = "0.1.9"
+__version__ = "0.1.10"
 __author__ = "Mike Fulton"
 
-from .main import execute_tso_command, main
+from .main import execute_tso_command, db2cmd, main
 
-__all__ = ["execute_tso_command", "main"]
+__all__ = ["execute_tso_command", "db2cmd", "main"]
 
 # Made with Bob
