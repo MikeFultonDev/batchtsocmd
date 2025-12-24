@@ -6,10 +6,11 @@ Run TSO and Db2 commands via IKJEFT1B with automatic encoding conversion.
 
 `batchtsocmd` is a Python utility for z/OS that executes TSO commands through IKJEFT1B with automatic ASCII/EBCDIC encoding conversion. It handles SYSIN and SYSTSIN inputs from files, automatically converting them to EBCDIC as needed.
 
-The package includes two main commands:
+The package includes three main commands:
 
 - `batchtsocmd` - General TSO command execution
-- `db2cmd` - Simplified Db2 command execution via DSNTEP2
+- `db2cmd` - Simplified Db2 SQL command execution via DSNTEP2
+- `db2admin` - Simplified Db2 administrative command execution via DSNTIAD
 
 ## Features
 
@@ -176,6 +177,71 @@ The `--dbrmlib` option (or `DB2_DBRMLIB` environment variable) can specify:
 - Both `--systsprt` and `--sysprint` default to 'stdout'
 - When stdout is used, SYSTSPRT output is written first, then SYSPRINT output
 
+### db2admin - Db2 Administrative Command Execution
+
+The `db2admin` command provides an interface for executing Db2 administrative commands via DSNTIAD. Unlike `db2cmd` which uses DSNTEP2 for SQL, `db2admin` uses DSNTIAD for administrative commands like DISPLAY, START, STOP, etc.
+
+#### Basic Usage
+
+```bash
+# Using command line options
+db2admin --system DB2P --plan DSNTIAD --toollib DSNC10.DBCG.RUNLIB.LOAD \
+    --sysin admin.txt
+
+# Using environment variables
+export DB2_SYSTEM=DB2P
+export DB2_PLAN=DSNTIAD
+export DB2_TOOLLIB=DSNC10.DBCG.RUNLIB.LOAD
+db2admin --sysin admin.txt
+
+# Using stdin pipe
+echo "-DISPLAY DATABASE(MYDB)" | db2admin --system DB2P \
+    --plan DSNTIAD --toollib DSNC10.DBCG.RUNLIB.LOAD
+
+# With STEPLIB
+db2admin --system DB2P --plan DSNTIAD --toollib DSNC10.DBCG.RUNLIB.LOAD \
+    --sysin admin.txt --steplib DB2V13.SDSNLOAD
+
+# With concatenated STEPLIB datasets
+db2admin --system DB2P --plan DSNTIAD --toollib DSNC10.DBCG.RUNLIB.LOAD \
+    --sysin admin.txt --steplib DB2V13.SDSNLOAD:DB2V13.SDSNLOD2
+```
+
+#### Command Line Options
+
+- `--system ID` - Db2 subsystem ID (or set `DB2_SYSTEM` env var) (required)
+- `--plan NAME` - Db2 plan name (or set `DB2_PLAN` env var) (required)
+- `--toollib LIB` - Db2 tool library (or set `DB2_TOOLLIB` env var) (required)
+- `--sysin PATH` - Path to SYSIN input file (optional, reads from stdin if not specified)
+- `--systsprt PATH` - Path to SYSTSPRT output file or 'stdout' (optional, defaults to stdout)
+- `--sysprint PATH` - Path to SYSPRINT output file or 'stdout' (optional, defaults to stdout)
+- `--steplib DATASET` - Optional STEPLIB dataset name(s). Use colon (`:`) to concatenate multiple datasets
+- `-v, --verbose` - Enable verbose output
+- `--version` - Show version number and exit
+
+#### Environment Variables
+
+- `DB2_SYSTEM` - Default Db2 subsystem ID
+- `DB2_PLAN` - Default Db2 plan name
+- `DB2_TOOLLIB` - Default Db2 tool library
+
+**Note:** Command line options override environment variables.
+
+#### Key Differences from db2cmd
+
+- Uses DSNTIAD instead of DSNTEP2
+- Does not require DBRMLIB parameter
+- Does not pass PARMS to the utility program
+- Designed for administrative commands rather than SQL queries
+
+#### Notes
+
+- Input can be from a file (`--sysin`) or stdin (pipe)
+- Administrative commands are automatically padded to 80 bytes per line
+- Output files will be tagged as IBM-1047
+- Both `--systsprt` and `--sysprint` default to 'stdout'
+- When stdout is used, SYSTSPRT output is written first, then SYSPRINT output
+
 ## Python API
 
 ### version Function
@@ -322,6 +388,51 @@ rc = db2cmd(
 - `systsprt_file` - Output destination for SYSTSPRT (default: 'stdout')
 - `sysprint_file` - Output destination for SYSPRINT (default: 'stdout')
 - `verbose` - Enable verbose output
+
+### db2admin Function
+
+You can use the `db2admin` function directly in Python for Db2 administrative command execution:
+
+```python
+from batchtsocmd.main import db2admin
+
+# Using content string
+rc = db2admin(
+    sysin_content="-DISPLAY DATABASE(MYDB)",
+    system="DB2P",
+    plan="DSNTIAD",
+    toollib="DSNC10.DBCG.RUNLIB.LOAD",
+    steplib="DB2V13.SDSNLOAD",
+    verbose=True
+)
+
+# Using file
+rc = db2admin(
+    sysin_file="admin.txt",
+    system="DB2P",
+    plan="DSNTIAD",
+    toollib="DSNC10.DBCG.RUNLIB.LOAD"
+)
+```
+
+#### Parameters
+
+- `sysin_content` - DB2 administrative commands as a string (mutually exclusive with sysin_file)
+- `sysin_file` - Path to file containing DB2 administrative commands (mutually exclusive with sysin_content)
+- `system` - Db2 subsystem ID (required)
+- `plan` - Db2 plan name (required)
+- `toollib` - Db2 tool library (required)
+- `steplib` - Optional STEPLIB dataset(s) - single string or list for concatenation
+- `systsprt_file` - Output destination for SYSTSPRT (default: 'stdout')
+- `sysprint_file` - Output destination for SYSPRINT (default: 'stdout')
+- `verbose` - Enable verbose output
+
+#### Key Differences from db2cmd
+
+- Uses DSNTIAD instead of DSNTEP2
+- Does not support DBRMLIB parameter (not needed for administrative commands)
+- Does not pass PARMS to the utility program
+- Designed for administrative commands (DISPLAY, START, STOP, etc.) rather than SQL
 
 ## License
 
