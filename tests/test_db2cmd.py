@@ -7,7 +7,7 @@ import os
 import sys
 import tempfile
 import unittest
-from batchtsocmd.main import execute_tso_command, db2cmd
+from batchtsocmd.main import tsocmd, db2cmd
 
 
 class TestDB2Commands(unittest.TestCase):
@@ -68,7 +68,7 @@ CREATE DATABASE DUMMY
                 systsprt_path = systsprt.name
             
             # Run batchtsocmd with both SYSTSIN and SYSIN, and STEPLIB
-            rc = execute_tso_command(
+            rc = tsocmd(
                 systsin_file=systsin_path,
                 sysin_file=sysin_path,
                 sysprint_file=sysprint_path,
@@ -152,7 +152,7 @@ CREATE DATABASE DUMMY
             
             try:
                 # Run batchtsocmd with SYSTSPRT to stdout, SYSPRINT to file
-                rc = execute_tso_command(
+                rc = tsocmd(
                     systsin_file=systsin_path,
                     sysin_file=sysin_path,
                     sysprint_file=sysprint_path,
@@ -236,7 +236,7 @@ CREATE DATABASE DUMMY
             
             try:
                 # Run batchtsocmd with SYSPRINT to stdout, SYSTSPRT to file
-                rc = execute_tso_command(
+                rc = tsocmd(
                     systsin_file=systsin_path,
                     sysin_file=sysin_path,
                     sysprint_file='stdout',  # This goes to stdout
@@ -320,7 +320,7 @@ CREATE DATABASE DUMMY
             
             try:
                 # Run batchtsocmd with both SYSTSPRT and SYSPRINT to stdout
-                rc = execute_tso_command(
+                rc = tsocmd(
                     systsin_file=systsin_path,
                     sysin_file=sysin_path,
                     sysprint_file='stdout',  # Both go to stdout

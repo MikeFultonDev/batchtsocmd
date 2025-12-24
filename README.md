@@ -7,8 +7,9 @@ Run TSO and Db2 commands via IKJEFT1B with automatic encoding conversion.
 `batchtsocmd` is a Python utility for z/OS that executes TSO commands through IKJEFT1B with automatic ASCII/EBCDIC encoding conversion. It handles SYSIN and SYSTSIN inputs from files, automatically converting them to EBCDIC as needed.
 
 The package includes two main commands:
+
 - `batchtsocmd` - General TSO command execution
-- `db2` - Simplified Db2 command execution via DSNTEP2
+- `db2cmd` - Simplified Db2 command execution via DSNTEP2
 
 ## Features
 
@@ -93,6 +94,7 @@ batchtsocmd --systsin systsin.txt --sysin input.txt \
 - `--steplib DATASET` - Optional STEPLIB dataset name(s). Use colon (`:`) to concatenate multiple datasets (e.g., `DB2V13.SDSNLOAD` or `DB2V13.SDSNLOAD:DB2V13.SDSNLOD2`)
 - `--dbrmlib DATASET` - Optional DBRMLIB dataset name(s). Use colon (`:`) to concatenate multiple datasets (e.g., `DB2V13.DBRMLIB` or `DB2V13.DBRMLIB:DB2V13.DBRMLI2`)
 - `-v, --verbose` - Enable verbose output
+- `--version` - Show version number and exit
 
 #### Notes
 
@@ -102,37 +104,37 @@ batchtsocmd --systsin systsin.txt --sysin input.txt \
 - Both --systsprt and --sysprint default to 'stdout'
 - When stdout is used, SYSTSPRT output is written first, then SYSPRINT output
 
-### db2 - Db2 Command Execution
+### db2cmd - Db2 Command Execution
 
-The `db2` command provides a simplified interface for executing Db2 SQL commands via DSNTEP2.
+The `db2cmd` command provides a simplified interface for executing Db2 SQL commands via DSNTEP2.
 
 #### Basic Usage
 
 ```bash
 # Using command line options
-db2 --system DB2P --plan DSNTEP12 --toollib DSNC10.DBCG.RUNLIB.LOAD \
+db2cmd --system DB2P --plan DSNTEP12 --toollib DSNC10.DBCG.RUNLIB.LOAD \
     --sysin query.sql
 
 # Using environment variables
 export DB2_SYSTEM=DB2P
 export DB2_PLAN=DSNTEP12
 export DB2_TOOLLIB=DSNC10.DBCG.RUNLIB.LOAD
-db2 --sysin query.sql
+db2cmd --sysin query.sql
 
 # Using stdin pipe
-echo "SELECT * FROM SYSIBM.SYSTABLES;" | db2 --system DB2P \
+echo "SELECT * FROM SYSIBM.SYSTABLES;" | db2cmd --system DB2P \
     --plan DSNTEP12 --toollib DSNC10.DBCG.RUNLIB.LOAD
 
 # With STEPLIB
-db2 --system DB2P --plan DSNTEP12 --toollib DSNC10.DBCG.RUNLIB.LOAD \
+db2cmd --system DB2P --plan DSNTEP12 --toollib DSNC10.DBCG.RUNLIB.LOAD \
     --sysin query.sql --steplib DB2V13.SDSNLOAD
 
 # With DBRMLIB directory
-db2 --system DB2P --plan DSNTEP12 --toollib DSNC10.DBCG.RUNLIB.LOAD \
+db2cmd --system DB2P --plan DSNTEP12 --toollib DSNC10.DBCG.RUNLIB.LOAD \
     --sysin query.sql --dbrmlib /u/myuser/dbrmlib
 
 # With concatenated STEPLIB datasets
-db2 --system DB2P --plan DSNTEP12 --toollib DSNC10.DBCG.RUNLIB.LOAD \
+db2cmd --system DB2P --plan DSNTEP12 --toollib DSNC10.DBCG.RUNLIB.LOAD \
     --sysin query.sql --steplib DB2V13.SDSNLOAD:DB2V13.SDSNLOD2
 ```
 
@@ -147,6 +149,7 @@ db2 --system DB2P --plan DSNTEP12 --toollib DSNC10.DBCG.RUNLIB.LOAD \
 - `--steplib DATASET` - Optional STEPLIB dataset name(s). Use colon (`:`) to concatenate multiple datasets
 - `--dbrmlib DATASET` - Optional DBRMLIB dataset name(s) or directory (or set `DB2_DBRMLIB` env var). Use colon (`:`) to concatenate multiple datasets
 - `-v, --verbose` - Enable verbose output
+- `--version` - Show version number and exit
 
 #### Environment Variables
 
@@ -173,9 +176,117 @@ The `--dbrmlib` option (or `DB2_DBRMLIB` environment variable) can specify:
 - Both `--systsprt` and `--sysprint` default to 'stdout'
 - When stdout is used, SYSTSPRT output is written first, then SYSPRINT output
 
-### Python API
+## Python API
 
-You can also use the `db2cmd` function directly in Python:
+### version Function
+
+Get the version of the batchtsocmd package:
+
+```python
+from batchtsocmd import version
+
+# Get version string
+ver = version()
+print(f"batchtsocmd version: {ver}")
+```
+
+You can also access the version directly:
+
+```python
+from batchtsocmd import __version__
+
+print(f"batchtsocmd version: {__version__}")
+```
+
+### tsocmd Function
+
+You can use the `tsocmd` function directly in Python for general TSO command execution:
+
+```python
+from batchtsocmd.main import tsocmd
+
+# Execute TSO command with SYSTSIN and SYSIN files
+rc = tsocmd(
+    systsin_file="systsin.txt",
+    sysin_file="input.txt",
+    systsprt_file="output.txt",
+    sysprint_file="print.txt",
+    steplib="DB2V13.SDSNLOAD",
+    verbose=True
+)
+
+# With concatenated STEPLIB datasets
+rc = tsocmd(
+    systsin_file="systsin.txt",
+    sysin_file="input.txt",
+    steplib=["DB2V13.SDSNLOAD", "DB2V13.SDSNLOD2"],
+    dbrmlib=["DB2V13.DBRMLIB", "DB2V13.DBRMLI2"],
+    verbose=True
+)
+
+# Output to stdout (default)
+rc = tsocmd(
+    systsin_file="systsin.txt",
+    sysin_file="input.txt",
+    steplib="DB2V13.SDSNLOAD"
+)
+```
+
+#### Parameters
+
+- `systsin_file` - Path to SYSTSIN input file (required)
+- `sysin_file` - Path to SYSIN input file (required)
+- `systsprt_file` - Output destination for SYSTSPRT (default: 'stdout')
+- `sysprint_file` - Output destination for SYSPRINT (default: 'stdout')
+- `steplib` - Optional STEPLIB dataset(s) - single string or list for concatenation
+- `dbrmlib` - Optional DBRMLIB dataset(s) - single string or list for concatenation
+- `verbose` - Enable verbose output
+
+#### How It Works
+
+The `tsocmd` function executes TSO commands through the IKJEFT1B batch processor with the following workflow:
+
+1. **Input Validation**: Validates that both SYSTSIN and SYSIN input files exist and are readable
+
+2. **Encoding Conversion**:
+   - Automatically detects file encoding using file tags
+   - Converts ASCII (ISO8859-1) files to EBCDIC (IBM-1047) as needed
+   - Untagged files are assumed to be EBCDIC and copied as-is
+   - Uses the `zos-ccsid-converter` package for reliable conversion
+
+3. **SYSIN Padding**:
+   - Pads each line in the SYSIN file to exactly 80 bytes
+   - Truncates lines longer than 80 bytes with a warning
+   - Ensures proper fixed-length record format for MVS processing
+
+4. **DD Statement Setup**:
+   - Creates DD statements for IKJEFT1B execution
+   - Configures STEPLIB if provided (supports concatenation)
+   - Configures DBRMLIB if provided (supports concatenation)
+   - Sets up SYSTSIN with converted input
+   - Sets up SYSIN with padded and converted input
+   - Configures SYSTSPRT and SYSPRINT outputs (file or stdout)
+   - Adds SYSUDUMP as DUMMY
+
+5. **Execution**:
+   - Executes IKJEFT1B using `mvscmd.execute_authorized()` from ZOAU
+   - Runs with proper DD allocations and file definitions
+
+6. **Output Handling**:
+   - If stdout is requested, reads temporary output files and writes to stdout
+   - Outputs SYSTSPRT first, then SYSPRINT (maintaining proper order)
+   - Tags output files as IBM-1047 for proper encoding
+   - Returns the IKJEFT1B return code
+
+7. **Cleanup**:
+   - Automatically removes all temporary files
+   - Ensures cleanup even if errors occur
+
+This approach provides a seamless way to execute TSO commands from Python with automatic handling of encoding conversions and proper MVS file formats.
+
+### db2cmd Function
+
+You can use the `db2cmd` function directly in Python for Db2 command execution:
 
 ```python
 from batchtsocmd.main import db2cmd
@@ -199,7 +310,7 @@ rc = db2cmd(
 )
 ```
 
-#### db2cmd Parameters
+#### Parameters
 
 - `sysin_content` - SQL commands as a string (mutually exclusive with sysin_file)
 - `sysin_file` - Path to file containing SQL commands (mutually exclusive with sysin_content)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-db2 - Execute Db2 commands via DSNTEP2 with encoding conversion
+db2cmd - Execute Db2 commands via DSNTEP2 with encoding conversion
 Command-line interface for db2cmd functionality
 """
 
@@ -8,11 +8,11 @@ import sys
 import os
 import argparse
 import tempfile
-from .main import db2cmd
+from .main import db2cmd, __version__
 
 
 def main():
-    """Main entry point for db2 command"""
+    """Main entry point for db2cmd command"""
     parser = argparse.ArgumentParser(
         description='Execute Db2 commands via DSNTEP2 with encoding conversion',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -25,25 +25,25 @@ Environment Variables:
 
 Examples:
   # Using command line options
-  db2 --system DB2P --plan DSNTEP12 --toollib DSNC10.DBCG.RUNLIB.LOAD \\
+  db2cmd --system DB2P --plan DSNTEP12 --toollib DSNC10.DBCG.RUNLIB.LOAD \\
       --sysin query.sql --steplib DB2V13.SDSNLOAD
 
   # Using environment variables
   export DB2_SYSTEM=DB2P
   export DB2_PLAN=DSNTEP12
   export DB2_TOOLLIB=DSNC10.DBCG.RUNLIB.LOAD
-  db2 --sysin query.sql
+  db2cmd --sysin query.sql
 
   # Using stdin pipe
-  echo "SELECT * FROM SYSIBM.SYSTABLES;" | db2 --system DB2P \\
+  echo "SELECT * FROM SYSIBM.SYSTABLES;" | db2cmd --system DB2P \\
       --plan DSNTEP12 --toollib DSNC10.DBCG.RUNLIB.LOAD
 
   # With DBRMLIB directory
-  db2 --system DB2P --plan DSNTEP12 --toollib DSNC10.DBCG.RUNLIB.LOAD \\
+  db2cmd --system DB2P --plan DSNTEP12 --toollib DSNC10.DBCG.RUNLIB.LOAD \\
       --sysin query.sql --dbrmlib /u/myuser/dbrmlib
 
   # With concatenated STEPLIB datasets
-  db2 --system DB2P --plan DSNTEP12 --toollib DSNC10.DBCG.RUNLIB.LOAD \\
+  db2cmd --system DB2P --plan DSNTEP12 --toollib DSNC10.DBCG.RUNLIB.LOAD \\
       --sysin query.sql --steplib DB2V13.SDSNLOAD:DB2V13.SDSNLOD2
 
 Note: Command line options override environment variables.
@@ -98,6 +98,12 @@ Note: Command line options override environment variables.
         '-v', '--verbose',
         action='store_true',
         help='Enable verbose output'
+    )
+    
+    parser.add_argument(
+        '--version',
+        action='version',
+        version=f'%(prog)s {__version__}'
     )
     
     args = parser.parse_args()

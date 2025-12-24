@@ -7,7 +7,7 @@ import os
 import tempfile
 import unittest
 from zoautil_py import datasets
-from batchtsocmd.main import execute_tso_command
+from batchtsocmd.main import tsocmd
 
 
 class TestDatasetOperations(unittest.TestCase):
@@ -50,7 +50,7 @@ class TestDatasetOperations(unittest.TestCase):
                 sysprint_path = sysprint.name
             
             # Execute allocation command
-            rc = execute_tso_command(
+            rc = tsocmd(
                 systsin_file=systsin_path,
                 sysin_file=sysin_path,
                 sysprint_file=sysprint_path,
@@ -82,7 +82,7 @@ class TestDatasetOperations(unittest.TestCase):
                 systsprt2_path = systsprt2.name
             
             # Execute deletion command
-            rc = execute_tso_command(
+            rc = tsocmd(
                 systsin_file=systsin2_path,
                 sysin_file=sysin2_path,
                 systsprt_file=systsprt2_path,
@@ -129,7 +129,7 @@ class TestDatasetOperations(unittest.TestCase):
             
             # Execute allocation command with SYSPRINT to stdout
             # This tests the temporary file -> stdout mechanism
-            rc = execute_tso_command(
+            rc = tsocmd(
                 systsin_file=systsin_path,
                 sysin_file=sysin_path,
                 sysprint_file='stdout',  # Use stdout
@@ -149,7 +149,7 @@ class TestDatasetOperations(unittest.TestCase):
                 sysin2_path = sysin2.name
             
             # Execute deletion command with SYSPRINT to stdout
-            rc = execute_tso_command(
+            rc = tsocmd(
                 systsin_file=systsin2_path,
                 sysin_file=sysin2_path,
                 sysprint_file='stdout',  # Use stdout

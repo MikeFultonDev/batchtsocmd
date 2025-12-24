@@ -8,7 +8,7 @@ import sys
 import tempfile
 import unittest
 from zoautil_py import datasets
-from batchtsocmd.main import execute_tso_command
+from batchtsocmd.main import tsocmd
 
 
 class TestConcatenatedDatasets(unittest.TestCase):
@@ -91,7 +91,7 @@ CREATE DATABASE DUMMY
                 systsprt_path = systsprt.name
             
             # Run batchtsocmd with single STEPLIB dataset (string)
-            rc = execute_tso_command(
+            rc = tsocmd(
                 systsin_file=systsin_path,
                 sysin_file=sysin_path,
                 systsprt_file=systsprt_path,
@@ -159,7 +159,7 @@ CREATE DATABASE DUMMY
                 systsprt_path = systsprt.name
             
             # Run batchtsocmd with concatenated STEPLIB datasets (list)
-            rc = execute_tso_command(
+            rc = tsocmd(
                 systsin_file=systsin_path,
                 sysin_file=sysin_path,
                 systsprt_file=systsprt_path,
@@ -227,7 +227,7 @@ CREATE DATABASE DUMMY
                 systsprt_path = systsprt.name
             
             # Run batchtsocmd with single DBRMLIB dataset (string)
-            rc = execute_tso_command(
+            rc = tsocmd(
                 systsin_file=systsin_path,
                 sysin_file=sysin_path,
                 systsprt_file=systsprt_path,
@@ -296,7 +296,7 @@ CREATE DATABASE DUMMY
                 systsprt_path = systsprt.name
             
             # Run batchtsocmd with concatenated STEPLIB and DBRMLIB datasets (lists)
-            rc = execute_tso_command(
+            rc = tsocmd(
                 systsin_file=systsin_path,
                 sysin_file=sysin_path,
                 systsprt_file=systsprt_path,

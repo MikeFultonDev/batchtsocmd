@@ -14,12 +14,12 @@ from zoautil_py.ztypes import DDStatement, FileDefinition, DatasetDefinition
 # Check zos-ccsid-converter version
 try:
     import zos_ccsid_converter
-    from packaging import version
+    from packaging import version as pkg_version
     
     required_version = "0.1.8"
     installed_version = getattr(zos_ccsid_converter, '__version__', '0.0.0')
     
-    if version.parse(installed_version) < version.parse(required_version):
+    if pkg_version.parse(installed_version) < pkg_version.parse(required_version):
         print(f"ERROR: zos-ccsid-converter version {required_version} or higher is required, "
               f"but version {installed_version} is installed.", file=sys.stderr)
         print(f"Please upgrade: pip install --upgrade 'zos-ccsid-converter>={required_version}'", file=sys.stderr)
@@ -30,6 +30,19 @@ except ImportError as e:
     sys.exit(1)
 
 from zos_ccsid_converter import CodePageService
+
+# Package version
+__version__ = "0.1.11"
+
+
+def version() -> str:
+    """
+    Return the version of batchtsocmd package
+    
+    Returns:
+        Version string
+    """
+    return __version__
 
 
 def convert_to_ebcdic(input_path: str, output_path: str, verbose: bool = False) -> bool:
@@ -123,7 +136,7 @@ def validate_input_file(path: str, name: str) -> bool:
     return True
 
 
-def execute_tso_command(systsin_file: str, sysin_file: str,
+def tsocmd(systsin_file: str, sysin_file: str,
                        systsprt_file: str = 'stdout',
                        sysprint_file: str = 'stdout',
                        steplib: str | list[str] | None = None,
@@ -414,7 +427,7 @@ def db2cmd(
             print(f"SYSIN source: {'content string' if sysin_content else sysin_file}")
         
         # Execute the TSO command
-        rc = execute_tso_command(
+        rc = tsocmd(
             systsin_file=temp_systsin.name,
             sysin_file=sysin_path,  # type: ignore
             systsprt_file=systsprt_file,
@@ -512,6 +525,12 @@ Note: Input files can be ASCII (ISO8859-1) or EBCDIC (IBM-1047).
         help='Enable verbose output'
     )
     
+    parser.add_argument(
+        '--version',
+        action='version',
+        version=f'%(prog)s {__version__}'
+    )
+    
     args = parser.parse_args()
     
     # Parse steplib and dbrmlib arguments (support colon-separated concatenation)
@@ -519,7 +538,7 @@ Note: Input files can be ASCII (ISO8859-1) or EBCDIC (IBM-1047).
     dbrmlib_list = args.dbrmlib.split(':') if args.dbrmlib else None
     
     # Execute the TSO command
-    rc = execute_tso_command(
+    rc = tsocmd(
         args.systsin,
         args.sysin,
         args.systsprt,
