@@ -36,6 +36,9 @@ env/
 *.swo
 *~
 
+# Bob modes (using symlink to common config)
+.bobmodes
+
 # macOS
 .DS_Store
 .AppleDouble

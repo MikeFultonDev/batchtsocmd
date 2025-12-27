@@ -1,0 +1,21 @@
+{
+  "include": [
+    "src",
+    "tests"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/.pixi"
+  ],
+  "typeCheckingMode": "basic",
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false,
+  "reportMissingModuleSource": false,
+  "pythonVersion": "3.8",
+  "pythonPlatform": "All",
+  "stubPath": "/Users/fultonm/Development/zoau_stubs",
+  "extraPaths": [
+    "/Users/fultonm/Development/zoau_stubs",
+    "src"
+  ]
+}

@@ -7,7 +7,7 @@ import os
 import sys
 import tempfile
 import unittest
-from zoautil_py import datasets
+from zoautil_py import datasets  # type: ignore[import-not-found]
 from batchtsocmd.main import tsocmd
 
 
@@ -35,7 +35,7 @@ class TestConcatenatedDatasets(unittest.TestCase):
             try:
                 datasets.create(
                     ds,
-                    type='PDSE',
+                    dataset_type='PDSE',
                     primary_space=1,
                     secondary_space=1,
                     space_unit='CYL',

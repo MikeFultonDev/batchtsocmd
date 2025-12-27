@@ -41,6 +41,7 @@ dev = [
     "build>=0.10.0",
     "twine>=3.0.0,<4.0.0",
     "readme-renderer>=21.0,<35.0",
+    "pyright>=1.1.0",
 ]
 test = [
     "pytest>=7.0.0",
