@@ -8,8 +8,6 @@ import tempfile
 import unittest
 from zoautil_py import datasets
 from batchtsocmd.main import tsocmd
-
-
 class TestDatasetOperations(unittest.TestCase):
     """Test basic dataset operations via batchtsocmd"""
     

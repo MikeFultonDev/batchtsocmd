@@ -32,7 +32,7 @@ except ImportError as e:
 from zos_ccsid_converter import CodePageService
 
 # Package version
-__version__ = "0.1.12"
+__version__ = "0.1.13"
 
 
 def version() -> str:
@@ -272,6 +272,14 @@ def tsocmd(systsin_file: str, sysin_file: str,
             dds=dds,
             verbose=verbose
         )
+        
+        # Check if mvscmd itself failed (e.g., invalid dataset name in DD)
+        if response.rc != 0:
+            print(f"\nError: mvscmd.execute_authorized failed with return code {response.rc}", file=sys.stderr)
+            if response.stderr_response:
+                print(f"Error details:\n{response.stderr_response}", file=sys.stderr)
+            if response.stdout_response:
+                print(f"Output:\n{response.stdout_response}", file=sys.stderr)
         
         # Output to stdout in correct order: SYSTSPRT first, then SYSPRINT
         # 1. SYSTSPRT output (if stdout was requested)
