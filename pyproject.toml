@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "batchtsocmd"
-version = "0.1.13"
-description = "Run TSO commands via IKJEFT1B"
+version = "0.2.0"
+description = "Run TSO and Db2 commands via IKJEFT1B"
 readme = "README.md"
 authors = [{name = "Mike Fulton"}]
 license = {text = "Apache-2.0"}
@@ -27,7 +27,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: System :: Systems Administration",
 ]
-keywords = ["zos", "tso", "mainframe", "ebcdic", "ikjeft1b"]
+keywords = ["zos", "tso", "db2", "mainframe", "ebcdic", "ikjeft1b", "dsntep2", "dsntiad"]
 requires-python = ">=3.8"
 dependencies = [
     "zoautil-py",
@@ -54,8 +54,10 @@ Issues = "https://github.com/MikeFultonDev/batchtsocmd/issues"
 
 [project.scripts]
 batchtsocmd = "batchtsocmd.main:main"
-db2cmd = "batchtsocmd.db2_cli:main"
-db2admin = "batchtsocmd.db2admin_cli:main"
+db2sql = "batchtsocmd.db2sql_cli:main"
+db2op = "batchtsocmd.db2op_cli:main"
+db2bind = "batchtsocmd.db2bind_cli:main"
+db2run = "batchtsocmd.db2run_cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

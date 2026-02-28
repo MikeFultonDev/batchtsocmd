@@ -38,6 +38,7 @@ env/
 
 # Bob modes (using symlink to common config)
 .bobmodes
+.bob/
 
 # macOS
 .DS_Store

@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
-db2cmd - Execute Db2 commands via DSNTEP2 with encoding conversion
-Command-line interface for db2cmd functionality
+db2_cli.py - DEPRECATED: use db2sql_cli.py / the db2sql command instead.
+
+This module is retained for backward compatibility only.
+The db2cmd entry point has been removed from pyproject.toml in version 0.2.0.
+Use db2sql for all new code.
 """
 
 import sys

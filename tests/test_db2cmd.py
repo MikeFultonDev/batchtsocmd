@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-Test DB2 command execution using batchtsocmd and db2cmd
+Test DB2 SQL execution using batchtsocmd and db2sql
 """
 
 import os
 import sys
 import tempfile
 import unittest
-from batchtsocmd.main import tsocmd, db2cmd
+from batchtsocmd.main import tsocmd, db2sql, db2cmd  # db2cmd kept for backward-compat tests
 
 
 class TestDB2Commands(unittest.TestCase):
-    """Test DB2 command execution via batchtsocmd"""
+    """Test Db2 SQL execution via batchtsocmd (tsocmd layer)"""
     
     def test_01_db2_invalid_subsystem_error(self):
         """Test DB2 command with invalid subsystem ID - expects failure.
@@ -366,11 +366,11 @@ CREATE DATABASE DUMMY
                     os.unlink(path)
 
 
-class TestDb2CmdFunction(unittest.TestCase):
-    """Test db2cmd function"""
-    
-    def test_05_db2cmd_with_file(self):
-        """Test db2cmd function with sysin_file parameter"""
+class TestDb2SqlFunction(unittest.TestCase):
+    """Test db2sql function (replaces db2cmd)"""
+
+    def test_05_db2sql_with_file(self):
+        """Test db2sql function with sysin_file parameter"""
         sysin_path = None
         sysprint_path = None
         systsprt_path = None
@@ -394,8 +394,8 @@ CREATE DATABASE DUMMY
             with tempfile.NamedTemporaryFile(mode='w', suffix='.systsprt', delete=False) as systsprt:
                 systsprt_path = systsprt.name
             
-            # Run db2cmd with file
-            rc = db2cmd(
+            # Run db2sql with file
+            rc = db2sql(
                 sysin_file=sysin_path,
                 system='NOOK',
                 plan='DSNTEP12',
@@ -405,16 +405,16 @@ CREATE DATABASE DUMMY
                 steplib='DB2V13.SDSNLOAD',
                 verbose=False
             )
-            
+
             # Read output files
             with open(sysprint_path, 'r', encoding='ibm1047') as f:
                 sysprint_output = f.read()
-            
+
             with open(systsprt_path, 'r', encoding='ibm1047') as f:
                 systsprt_output = f.read()
-            
+
             # Print diagnostic information for verification
-            print(f"\n=== db2cmd with file RC={rc} ===", file=sys.stderr)
+            print(f"\n=== db2sql with file RC={rc} ===", file=sys.stderr)
             print(f"SYSPRINT:\n{sysprint_output}", file=sys.stderr)
             print(f"SYSTSPRT:\n{systsprt_output}", file=sys.stderr)
             
@@ -435,8 +435,8 @@ CREATE DATABASE DUMMY
                 if path and os.path.exists(path):
                     os.unlink(path)
     
-    def test_06_db2cmd_with_content(self):
-        """Test db2cmd function with sysin_content parameter"""
+    def test_06_db2sql_with_content(self):
+        """Test db2sql function with sysin_content parameter"""
         sysprint_path = None
         systsprt_path = None
         
@@ -455,8 +455,8 @@ CREATE DATABASE DUMMY
             with tempfile.NamedTemporaryFile(mode='w', suffix='.systsprt', delete=False) as systsprt:
                 systsprt_path = systsprt.name
             
-            # Run db2cmd with content string
-            rc = db2cmd(
+            # Run db2sql with content string
+            rc = db2sql(
                 sysin_content=sysin_content,
                 system='NOOK',
                 plan='DSNTEP12',
@@ -466,16 +466,16 @@ CREATE DATABASE DUMMY
                 steplib='DB2V13.SDSNLOAD',
                 verbose=False
             )
-            
+
             # Read output files
             with open(sysprint_path, 'r', encoding='ibm1047') as f:
                 sysprint_output = f.read()
-            
+
             with open(systsprt_path, 'r', encoding='ibm1047') as f:
                 systsprt_output = f.read()
-            
+
             # Print diagnostic information for verification
-            print(f"\n=== db2cmd with content RC={rc} ===", file=sys.stderr)
+            print(f"\n=== db2sql with content RC={rc} ===", file=sys.stderr)
             print(f"SYSPRINT:\n{sysprint_output}", file=sys.stderr)
             print(f"SYSTSPRT:\n{systsprt_output}", file=sys.stderr)
             
@@ -496,79 +496,78 @@ CREATE DATABASE DUMMY
                 if path and os.path.exists(path):
                     os.unlink(path)
     
-    def test_07_db2cmd_validation_both_sysin(self):
-        """Test db2cmd validation - cannot specify both sysin_content and sysin_file"""
+    def test_07_db2sql_validation_both_sysin(self):
+        """Test db2sql validation - cannot specify both sysin_content and sysin_file"""
         sysin_path = None
-        
+
         try:
             # Create a temporary SYSIN file
             with tempfile.NamedTemporaryFile(mode='w', suffix='.sysin', delete=False) as sysin:
                 sysin.write("SELECT * FROM SYSIBM.SYSTABLES;")
                 sysin_path = sysin.name
-            
-            # Try to call db2cmd with both parameters - should fail
-            rc = db2cmd(
+
+            # Try to call db2sql with both parameters - should fail
+            rc = db2sql(
                 sysin_content="SELECT * FROM SYSIBM.SYSTABLES;",
                 sysin_file=sysin_path,
                 system='DB2P',
                 plan='DSNTEP12',
                 toollib='DSNC10.DBCG.RUNLIB.LOAD'
             )
-            
+
             # Should return error code 8
             self.assertEqual(rc, 8, "Expected error code 8 when both sysin_content and sysin_file are specified")
-            
+
         finally:
             if sysin_path and os.path.exists(sysin_path):
                 os.unlink(sysin_path)
-    
-    def test_08_db2cmd_validation_no_sysin(self):
-        """Test db2cmd validation - must specify either sysin_content or sysin_file"""
-        # Try to call db2cmd without either parameter - should fail
-        rc = db2cmd(
+
+    def test_08_db2sql_validation_no_sysin(self):
+        """Test db2sql validation - must specify either sysin_content or sysin_file"""
+        rc = db2sql(
             system='DB2P',
             plan='DSNTEP12',
             toollib='DSNC10.DBCG.RUNLIB.LOAD'
         )
-        
+
         # Should return error code 8
         self.assertEqual(rc, 8, "Expected error code 8 when neither sysin_content nor sysin_file are specified")
-    
-    def test_09_db2cmd_validation_missing_system(self):
-        """Test db2cmd validation - system parameter is required"""
-        rc = db2cmd(
+
+    def test_09_db2sql_validation_missing_system(self):
+        """Test db2sql validation - system parameter is required"""
+        rc = db2sql(
             sysin_content="SELECT * FROM SYSIBM.SYSTABLES;",
             plan='DSNTEP12',
             toollib='DSNC10.DBCG.RUNLIB.LOAD'
         )
-        
+
         # Should return error code 8
         self.assertEqual(rc, 8, "Expected error code 8 when system parameter is missing")
-    
-    def test_10_db2cmd_validation_missing_plan(self):
-        """Test db2cmd validation - plan parameter is required"""
-        rc = db2cmd(
+
+    def test_10_db2sql_validation_missing_plan(self):
+        """Test db2sql validation - plan parameter is required"""
+        rc = db2sql(
             sysin_content="SELECT * FROM SYSIBM.SYSTABLES;",
             system='DB2P',
             toollib='DSNC10.DBCG.RUNLIB.LOAD'
         )
-        
+
         # Should return error code 8
         self.assertEqual(rc, 8, "Expected error code 8 when plan parameter is missing")
-    
-    def test_11_db2cmd_validation_missing_toollib(self):
-        """Test db2cmd validation - toollib parameter is required"""
-        rc = db2cmd(
+
+    def test_11_db2sql_validation_missing_toollib(self):
+        """Test db2sql validation - toollib parameter is required"""
+        rc = db2sql(
             sysin_content="SELECT * FROM SYSIBM.SYSTABLES;",
             system='DB2P',
             plan='DSNTEP12'
         )
-        
+
         # Should return error code 8
         self.assertEqual(rc, 8, "Expected error code 8 when toollib parameter is missing")
-    
-    def test_12_db2cmd_with_stdout(self):
-        """Test db2cmd with both outputs to stdout"""
+
+    def test_12_db2sql_with_stdout(self):
+        """Test db2sql with both outputs to stdout"""
         try:
             # SYSIN content - SQL statements
             sysin_content = """SET CURRENT SQLID = 'NOTHERE';
@@ -576,16 +575,16 @@ CREATE DATABASE DUMMY
        BUFFERPOOL BP1
        INDEXBP BP2;
 """
-            
+
             # Capture stdout
             from io import StringIO
             captured_output = StringIO()
             old_stdout = sys.stdout
             sys.stdout = captured_output
-            
+
             try:
-                # Run db2cmd with both outputs to stdout
-                rc = db2cmd(
+                # Run db2sql with both outputs to stdout
+                rc = db2sql(
                     sysin_content=sysin_content,
                     system='NOOK',
                     plan='DSNTEP12',
@@ -597,11 +596,11 @@ CREATE DATABASE DUMMY
                 )
             finally:
                 sys.stdout = old_stdout
-            
+
             combined_output = captured_output.getvalue()
-            
+
             # Print diagnostic information for verification
-            print(f"\n=== db2cmd with stdout RC={rc} ===", file=sys.stderr)
+            print(f"\n=== db2sql with stdout RC={rc} ===", file=sys.stderr)
             print(f"Combined stdout output:\n{combined_output}", file=sys.stderr)
             
             # Verify return code is non-zero (command should fail)

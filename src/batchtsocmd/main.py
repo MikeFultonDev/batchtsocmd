@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-tester.py - Execute TSO commands via IKJEFT1B with encoding conversion
+main.py - Execute TSO and Db2 commands via IKJEFT1B with encoding conversion
 Handles SYSIN and SYSTSIN inputs with ASCII/EBCDIC conversion
 """
 
@@ -32,7 +32,7 @@ except ImportError as e:
 from zos_ccsid_converter import CodePageService
 
 # Package version
-__version__ = "0.1.13"
+__version__ = "0.2.0"
 
 
 def version() -> str:
@@ -346,7 +346,7 @@ def tsocmd(systsin_file: str, sysin_file: str,
             os.unlink(temp_sysprint.name)
 
 
-def db2cmd(
+def db2sql(
     sysin_content: str | None = None,
     sysin_file: str | None = None,
     system: str | None = None,
@@ -359,82 +359,83 @@ def db2cmd(
     verbose: bool = False
 ) -> int:
     """
-    Execute Db2 commands using DSNTEP2 via IKJEFT1B
-    
+    Execute SQL statements (DDL, DML, DQL, GRANT) using DSNTEP2 via IKJEFT1B.
+
+    Covers: SELECT, INSERT, UPDATE, DELETE, CREATE/DROP DATABASE/TABLE/TABLESPACE/
+    STOGROUP/INDEX, GRANT, REVOKE, SET CURRENT SQLID, and any other dynamic SQL.
+
     Args:
-        sysin_content: SQL commands as a string (mutually exclusive with sysin_file)
-        sysin_file: Path to file containing SQL commands (mutually exclusive with sysin_content)
+        sysin_content: SQL statements as a string (mutually exclusive with sysin_file)
+        sysin_file: Path to file containing SQL statements (mutually exclusive with sysin_content)
         system: Db2 subsystem ID (required)
-        plan: Db2 plan name (required)
-        toollib: Db2 tool library (required)
+        plan: Db2 plan name for DSNTEP2 (required)
+        toollib: Db2 tool library containing DSNTEP2 (required)
         dbrmlib: Optional DBRMLIB dataset name(s) - single string or list for concatenation
         steplib: Optional STEPLIB dataset name(s) - single string or list for concatenation
         systsprt_file: Path to SYSTSPRT output file or 'stdout' (defaults to 'stdout')
         sysprint_file: Path to SYSPRINT output file or 'stdout' (defaults to 'stdout')
         verbose: Enable verbose output
-    
+
     Returns:
         Return code from IKJEFT1B execution
     """
-    
+
     # Validate that exactly one of sysin_content or sysin_file is provided
     if sysin_content is not None and sysin_file is not None:
         print("ERROR: Cannot specify both sysin_content and sysin_file", file=sys.stderr)
         return 8
-    
+
     if sysin_content is None and sysin_file is None:
         print("ERROR: Must specify either sysin_content or sysin_file", file=sys.stderr)
         return 8
-    
+
     # Validate required parameters
     if system is None:
         print("ERROR: system parameter is required", file=sys.stderr)
         return 8
-    
+
     if plan is None:
         print("ERROR: plan parameter is required", file=sys.stderr)
         return 8
-    
+
     if toollib is None:
         print("ERROR: toollib parameter is required", file=sys.stderr)
         return 8
-    
+
     # Create temporary files
     temp_systsin = None
     temp_sysin = None
-    
+
     try:
-        # Generate SYSTSIN content with DSN commands
+        # Generate SYSTSIN content: DSN → RUN PROGRAM(DSNTEP2)
         systsin_content = f"""  DSN SYSTEM({system})
   RUN PROGRAM(DSNTEP2) PLAN({plan}) -
        LIB('{toollib}') PARMS('/ALIGN(MID)')
   END
 """
-        
+
         if verbose:
             print(f"Generated SYSTSIN content:")
             print(systsin_content)
-        
+
         # Create temporary SYSTSIN file
         temp_systsin = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.systsin')
         temp_systsin.write(systsin_content)
         temp_systsin.close()
-        
+
         # Handle SYSIN input
         if sysin_content is not None:
-            # Create temporary SYSIN file from content
             temp_sysin = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.sysin')
             temp_sysin.write(sysin_content)
             temp_sysin.close()
             sysin_path = temp_sysin.name
         else:
-            # Use provided file (we know it's not None due to validation above)
             sysin_path = sysin_file  # type: ignore
-        
+
         if verbose:
             print(f"SYSIN source: {'content string' if sysin_content else sysin_file}")
-        
-        # Execute the TSO command
+
+        # Execute via tsocmd
         rc = tsocmd(
             systsin_file=temp_systsin.name,
             sysin_file=sysin_path,  # type: ignore
@@ -444,19 +445,416 @@ def db2cmd(
             dbrmlib=dbrmlib,
             verbose=verbose
         )
-        
+
         return rc
-        
+
     except Exception as e:
-        print(f"ERROR: Failed to execute Db2 command: {e}", file=sys.stderr)
+        print(f"ERROR: Failed to execute Db2 SQL: {e}", file=sys.stderr)
         return 16
-        
+
     finally:
-        # Clean up temporary files
         if temp_systsin and os.path.exists(temp_systsin.name):
             os.unlink(temp_systsin.name)
         if temp_sysin and os.path.exists(temp_sysin.name):
             os.unlink(temp_sysin.name)
+
+
+def db2op(
+    sysin_content: str | None = None,
+    sysin_file: str | None = None,
+    system: str | None = None,
+    plan: str | None = None,
+    toollib: str | None = None,
+    steplib: str | list[str] | None = None,
+    systsprt_file: str = 'stdout',
+    sysprint_file: str = 'stdout',
+    verbose: bool = False
+) -> int:
+    """
+    Execute Db2 operator commands (-DISPLAY, -START, -STOP, etc.) using DSNTIAD via IKJEFT1B.
+
+    The SYSIN input should contain Db2 operator commands, one per line, with or without
+    the leading '-' prefix (it will be normalised automatically).
+
+    Args:
+        sysin_content: Db2 operator commands as a string (mutually exclusive with sysin_file)
+        sysin_file: Path to file containing Db2 operator commands (mutually exclusive with sysin_content)
+        system: Db2 subsystem ID (required)
+        plan: Db2 plan name for DSNTIAD (required)
+        toollib: Db2 tool library containing DSNTIAD (required)
+        steplib: Optional STEPLIB dataset name(s) - single string or list for concatenation
+        systsprt_file: Path to SYSTSPRT output file or 'stdout' (defaults to 'stdout')
+        sysprint_file: Path to SYSPRINT output file or 'stdout' (defaults to 'stdout')
+        verbose: Enable verbose output
+
+    Returns:
+        Return code from IKJEFT1B execution
+    """
+
+    # Validate that exactly one of sysin_content or sysin_file is provided
+    if sysin_content is not None and sysin_file is not None:
+        print("ERROR: Cannot specify both sysin_content and sysin_file", file=sys.stderr)
+        return 8
+
+    if sysin_content is None and sysin_file is None:
+        print("ERROR: Must specify either sysin_content or sysin_file", file=sys.stderr)
+        return 8
+
+    # Validate required parameters
+    if system is None:
+        print("ERROR: system parameter is required", file=sys.stderr)
+        return 8
+
+    if plan is None:
+        print("ERROR: plan parameter is required", file=sys.stderr)
+        return 8
+
+    if toollib is None:
+        print("ERROR: toollib parameter is required", file=sys.stderr)
+        return 8
+
+    # Create temporary files
+    temp_systsin = None
+    temp_sysin = None
+
+    try:
+        # Generate SYSTSIN content: DSN → RUN PROGRAM(DSNTIAD)
+        systsin_content = f"""  DSN SYSTEM({system})
+  RUN PROGRAM(DSNTIAD) PLAN({plan}) -
+       LIB('{toollib}')
+  END
+"""
+
+        if verbose:
+            print(f"Generated SYSTSIN content:")
+            print(systsin_content)
+
+        # Create temporary SYSTSIN file
+        temp_systsin = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.systsin')
+        temp_systsin.write(systsin_content)
+        temp_systsin.close()
+
+        # Handle SYSIN input - normalise operator command prefix
+        if sysin_content is not None:
+            # Ensure each non-blank line starts with '-'
+            normalised_lines = []
+            for line in sysin_content.splitlines():
+                stripped = line.strip()
+                if stripped and not stripped.startswith('-'):
+                    normalised_lines.append('-' + line.lstrip())
+                else:
+                    normalised_lines.append(line)
+            normalised_content = '\n'.join(normalised_lines) + '\n'
+            temp_sysin = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.sysin')
+            temp_sysin.write(normalised_content)
+            temp_sysin.close()
+            sysin_path = temp_sysin.name
+        else:
+            sysin_path = sysin_file  # type: ignore
+
+        if verbose:
+            print(f"SYSIN source: {'content string' if sysin_content else sysin_file}")
+
+        # Execute via tsocmd
+        rc = tsocmd(
+            systsin_file=temp_systsin.name,
+            sysin_file=sysin_path,  # type: ignore
+            systsprt_file=systsprt_file,
+            sysprint_file=sysprint_file,
+            steplib=steplib,
+            verbose=verbose
+        )
+
+        return rc
+
+    except Exception as e:
+        print(f"ERROR: Failed to execute Db2 operator command: {e}", file=sys.stderr)
+        return 16
+
+    finally:
+        if temp_systsin and os.path.exists(temp_systsin.name):
+            os.unlink(temp_systsin.name)
+        if temp_sysin and os.path.exists(temp_sysin.name):
+            os.unlink(temp_sysin.name)
+
+
+def db2bind(
+    system: str | None = None,
+    package: str | None = None,
+    plan: str | None = None,
+    members: str | list[str] | None = None,
+    owner: str | None = None,
+    qualifier: str | None = None,
+    action: str = 'REPLACE',
+    isolation: str | None = None,
+    pklist: str | list[str] | None = None,
+    dbrmlib: str | list[str] | None = None,
+    steplib: str | list[str] | None = None,
+    systsprt_file: str = 'stdout',
+    sysprint_file: str = 'stdout',
+    verbose: bool = False
+) -> int:
+    """
+    Execute Db2 BIND PACKAGE and/or BIND PLAN DSN subcommands via IKJEFT1B.
+
+    Generates SYSTSIN with one BIND PACKAGE subcommand per member, followed by
+    an optional BIND PLAN subcommand. No SYSIN SQL input is used.
+
+    Args:
+        system: Db2 subsystem ID (required)
+        package: Package collection name for BIND PACKAGE (e.g. 'PCBSA')
+        plan: Plan name for BIND PLAN (e.g. 'CBSA')
+        members: DBRM member name(s) to bind as packages - single string or list
+        owner: OWNER qualifier for BIND subcommands
+        qualifier: QUALIFIER for BIND subcommands
+        action: BIND action - 'ADD' or 'REPLACE' (default: 'REPLACE')
+        isolation: Isolation level for BIND PLAN (e.g. 'UR', 'CS', 'RS', 'RR')
+        pklist: Package list for BIND PLAN PKLIST - single string or list
+        dbrmlib: DBRMLIB dataset name(s) - single string or list for concatenation
+        steplib: Optional STEPLIB dataset name(s) - single string or list for concatenation
+        systsprt_file: Path to SYSTSPRT output file or 'stdout' (defaults to 'stdout')
+        sysprint_file: Path to SYSPRINT output file or 'stdout' (defaults to 'stdout')
+        verbose: Enable verbose output
+
+    Returns:
+        Return code from IKJEFT1B execution
+    """
+
+    # Validate required parameters
+    if system is None:
+        print("ERROR: system parameter is required", file=sys.stderr)
+        return 8
+
+    if package is None and plan is None:
+        print("ERROR: at least one of package or plan must be specified", file=sys.stderr)
+        return 8
+
+    if package is not None and members is None:
+        print("ERROR: members parameter is required when package is specified", file=sys.stderr)
+        return 8
+
+    # Normalise members to list
+    members_list: list[str] = []
+    if members is not None:
+        members_list = [members] if isinstance(members, str) else list(members)
+
+    # Build SYSTSIN content
+    lines = [f"  DSN SYSTEM({system})"]
+
+    # One BIND PACKAGE per member
+    if package is not None:
+        for member in members_list:
+            bind_pkg = f"  BIND PACKAGE({package})"
+            if owner:
+                bind_pkg += f" OWNER({owner}) -"
+                lines.append(bind_pkg)
+                qualifier_line = f"  QUALIFIER({qualifier}) -" if qualifier else "  -"
+                lines.append(qualifier_line)
+                lines.append(f"  MEMBER({member}) -")
+            else:
+                bind_pkg += f" MEMBER({member}) -"
+                lines.append(bind_pkg)
+            lines.append(f"  ACTION({action})")
+            lines.append("")
+
+    # BIND PLAN
+    if plan is not None:
+        bind_plan = f"  BIND PLAN({plan})"
+        if owner:
+            bind_plan += f" -"
+            lines.append(bind_plan)
+            lines.append(f"   OWNER({owner}) -")
+        else:
+            bind_plan += " -"
+            lines.append(bind_plan)
+        if isolation:
+            lines.append(f"   ISOLATION({isolation}) -")
+        if pklist:
+            pklist_list = [pklist] if isinstance(pklist, str) else list(pklist)
+            lines.append(f"   PKLIST( -")
+            for i, pkg in enumerate(pklist_list):
+                suffix = " -" if i < len(pklist_list) - 1 else " )"
+                lines.append(f"   {pkg}{suffix}")
+        else:
+            # Remove trailing ' -' from last line if no pklist
+            if lines and lines[-1].endswith(' -'):
+                lines[-1] = lines[-1][:-2]
+
+    lines.append("  END")
+    systsin_content = '\n'.join(lines) + '\n'
+
+    if verbose:
+        print("Generated SYSTSIN content:")
+        print(systsin_content)
+
+    # db2bind uses a dummy SYSIN (BIND subcommands need no SQL input)
+    dummy_sysin_content = " "
+
+    temp_systsin = None
+    temp_sysin = None
+
+    try:
+        temp_systsin = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.systsin')
+        temp_systsin.write(systsin_content)
+        temp_systsin.close()
+
+        temp_sysin = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.sysin')
+        temp_sysin.write(dummy_sysin_content)
+        temp_sysin.close()
+
+        rc = tsocmd(
+            systsin_file=temp_systsin.name,
+            sysin_file=temp_sysin.name,
+            systsprt_file=systsprt_file,
+            sysprint_file=sysprint_file,
+            steplib=steplib,
+            dbrmlib=dbrmlib,
+            verbose=verbose
+        )
+
+        return rc
+
+    except Exception as e:
+        print(f"ERROR: Failed to execute Db2 BIND: {e}", file=sys.stderr)
+        return 16
+
+    finally:
+        if temp_systsin and os.path.exists(temp_systsin.name):
+            os.unlink(temp_systsin.name)
+        if temp_sysin and os.path.exists(temp_sysin.name):
+            os.unlink(temp_sysin.name)
+
+
+def db2run(
+    program: str | None = None,
+    system: str | None = None,
+    plan: str | None = None,
+    toollib: str | None = None,
+    parms: str | None = None,
+    steplib: str | list[str] | None = None,
+    systsprt_file: str = 'stdout',
+    sysprint_file: str = 'stdout',
+    verbose: bool = False
+) -> int:
+    """
+    Execute an arbitrary Db2-bound program using DSN RUN PROGRAM via IKJEFT1B.
+
+    Generates SYSTSIN with DSN SYSTEM(...) / RUN PROGRAM(...) PLAN(...) LIB(...).
+    No SYSIN SQL input is used - all parameters are on the RUN PROGRAM subcommand.
+
+    Args:
+        program: Name of the program to run (required)
+        system: Db2 subsystem ID (required)
+        plan: Db2 plan name bound for the program (required)
+        toollib: Load library containing the program (required)
+        parms: Optional PARM string to pass to the program
+        steplib: Optional STEPLIB dataset name(s) - single string or list for concatenation
+        systsprt_file: Path to SYSTSPRT output file or 'stdout' (defaults to 'stdout')
+        sysprint_file: Path to SYSPRINT output file or 'stdout' (defaults to 'stdout')
+        verbose: Enable verbose output
+
+    Returns:
+        Return code from IKJEFT1B execution
+    """
+
+    # Validate required parameters
+    if program is None:
+        print("ERROR: program parameter is required", file=sys.stderr)
+        return 8
+
+    if system is None:
+        print("ERROR: system parameter is required", file=sys.stderr)
+        return 8
+
+    if plan is None:
+        print("ERROR: plan parameter is required", file=sys.stderr)
+        return 8
+
+    if toollib is None:
+        print("ERROR: toollib parameter is required", file=sys.stderr)
+        return 8
+
+    temp_systsin = None
+    temp_sysin = None
+
+    try:
+        # Build RUN PROGRAM subcommand
+        run_line = f"  RUN PROGRAM({program}) PLAN({plan}) -"
+        if parms:
+            lib_line = f"       LIB('{toollib}') PARM('{parms}')"
+        else:
+            lib_line = f"       LIB('{toollib}')"
+
+        systsin_content = f"""  DSN SYSTEM({system})
+{run_line}
+{lib_line}
+  END
+"""
+
+        if verbose:
+            print("Generated SYSTSIN content:")
+            print(systsin_content)
+
+        temp_systsin = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.systsin')
+        temp_systsin.write(systsin_content)
+        temp_systsin.close()
+
+        # db2run uses a dummy SYSIN
+        temp_sysin = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.sysin')
+        temp_sysin.write(" ")
+        temp_sysin.close()
+
+        rc = tsocmd(
+            systsin_file=temp_systsin.name,
+            sysin_file=temp_sysin.name,
+            systsprt_file=systsprt_file,
+            sysprint_file=sysprint_file,
+            steplib=steplib,
+            verbose=verbose
+        )
+
+        return rc
+
+    except Exception as e:
+        print(f"ERROR: Failed to execute Db2 RUN PROGRAM: {e}", file=sys.stderr)
+        return 16
+
+    finally:
+        if temp_systsin and os.path.exists(temp_systsin.name):
+            os.unlink(temp_systsin.name)
+        if temp_sysin and os.path.exists(temp_sysin.name):
+            os.unlink(temp_sysin.name)
+
+
+# ---------------------------------------------------------------------------
+# Backward-compatibility aliases (deprecated - use db2sql / db2op instead)
+# ---------------------------------------------------------------------------
+
+def db2cmd(
+    sysin_content: str | None = None,
+    sysin_file: str | None = None,
+    system: str | None = None,
+    plan: str | None = None,
+    toollib: str | None = None,
+    dbrmlib: str | list[str] | None = None,
+    steplib: str | list[str] | None = None,
+    systsprt_file: str = 'stdout',
+    sysprint_file: str = 'stdout',
+    verbose: bool = False
+) -> int:
+    """Deprecated: use db2sql() instead."""
+    return db2sql(
+        sysin_content=sysin_content,
+        sysin_file=sysin_file,
+        system=system,
+        plan=plan,
+        toollib=toollib,
+        dbrmlib=dbrmlib,
+        steplib=steplib,
+        systsprt_file=systsprt_file,
+        sysprint_file=sysprint_file,
+        verbose=verbose
+    )
 
 
 def db2admin(
@@ -470,103 +868,18 @@ def db2admin(
     sysprint_file: str = 'stdout',
     verbose: bool = False
 ) -> int:
-    """
-    Execute Db2 administrative commands using DSNTIAD via IKJEFT1B
-    
-    Args:
-        sysin_content: DB2 administrative commands as a string (mutually exclusive with sysin_file)
-        sysin_file: Path to file containing DB2 administrative commands (mutually exclusive with sysin_content)
-        system: Db2 subsystem ID (required)
-        plan: Db2 plan name (required)
-        toollib: Db2 tool library (required)
-        steplib: Optional STEPLIB dataset name(s) - single string or list for concatenation
-        systsprt_file: Path to SYSTSPRT output file or 'stdout' (defaults to 'stdout')
-        sysprint_file: Path to SYSPRINT output file or 'stdout' (defaults to 'stdout')
-        verbose: Enable verbose output
-    
-    Returns:
-        Return code from IKJEFT1B execution
-    """
-    
-    # Validate that exactly one of sysin_content or sysin_file is provided
-    if sysin_content is not None and sysin_file is not None:
-        print("ERROR: Cannot specify both sysin_content and sysin_file", file=sys.stderr)
-        return 8
-    
-    if sysin_content is None and sysin_file is None:
-        print("ERROR: Must specify either sysin_content or sysin_file", file=sys.stderr)
-        return 8
-    
-    # Validate required parameters
-    if system is None:
-        print("ERROR: system parameter is required", file=sys.stderr)
-        return 8
-    
-    if plan is None:
-        print("ERROR: plan parameter is required", file=sys.stderr)
-        return 8
-    
-    if toollib is None:
-        print("ERROR: toollib parameter is required", file=sys.stderr)
-        return 8
-    
-    # Create temporary files
-    temp_systsin = None
-    temp_sysin = None
-    
-    try:
-        # Generate SYSTSIN content with DSN commands for DSNTIAD (no PARMS)
-        systsin_content = f"""  DSN SYSTEM({system})
-  RUN PROGRAM(DSNTIAD) PLAN({plan}) -
-       LIB('{toollib}')
-  END
-"""
-        
-        if verbose:
-            print(f"Generated SYSTSIN content:")
-            print(systsin_content)
-        
-        # Create temporary SYSTSIN file
-        temp_systsin = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.systsin')
-        temp_systsin.write(systsin_content)
-        temp_systsin.close()
-        
-        # Handle SYSIN input
-        if sysin_content is not None:
-            # Create temporary SYSIN file from content
-            temp_sysin = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.sysin')
-            temp_sysin.write(sysin_content)
-            temp_sysin.close()
-            sysin_path = temp_sysin.name
-        else:
-            # Use provided file (we know it's not None due to validation above)
-            sysin_path = sysin_file  # type: ignore
-        
-        if verbose:
-            print(f"SYSIN source: {'content string' if sysin_content else sysin_file}")
-        
-        # Execute the TSO command
-        rc = tsocmd(
-            systsin_file=temp_systsin.name,
-            sysin_file=sysin_path,  # type: ignore
-            systsprt_file=systsprt_file,
-            sysprint_file=sysprint_file,
-            steplib=steplib,
-            verbose=verbose
-        )
-        
-        return rc
-        
-    except Exception as e:
-        print(f"ERROR: Failed to execute Db2 administrative command: {e}", file=sys.stderr)
-        return 16
-        
-    finally:
-        # Clean up temporary files
-        if temp_systsin and os.path.exists(temp_systsin.name):
-            os.unlink(temp_systsin.name)
-        if temp_sysin and os.path.exists(temp_sysin.name):
-            os.unlink(temp_sysin.name)
+    """Deprecated: use db2op() instead."""
+    return db2op(
+        sysin_content=sysin_content,
+        sysin_file=sysin_file,
+        system=system,
+        plan=plan,
+        toollib=toollib,
+        steplib=steplib,
+        systsprt_file=systsprt_file,
+        sysprint_file=sysprint_file,
+        verbose=verbose
+    )
 
 
 def main():
