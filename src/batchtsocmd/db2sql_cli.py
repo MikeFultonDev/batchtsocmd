@@ -22,7 +22,6 @@ Environment Variables:
   DB2_PLAN      - Default Db2 plan name for DSNTEP2
   DB2_TOOLLIB   - Default Db2 tool library
   DB2_STEPLIB   - Default STEPLIB dataset(s)
-  DB2_DBRMLIB   - Default DBRMLIB dataset or directory
 
 Examples:
   # Inline SQL
@@ -69,7 +68,7 @@ Note: Command line options override environment variables.
 
     parser.add_argument(
         '--plan',
-        help='Db2 plan name for DSNTEP2 (or set DB2_PLAN env var)'
+        help='Db2 plan name for DSNTEP2 (or set DB2_PLAN env var, defaults to DSNTEP2)'
     )
 
     parser.add_argument(
@@ -83,11 +82,6 @@ Note: Command line options override environment variables.
     )
 
     parser.add_argument(
-        '--dbrmlib',
-        help='Optional DBRMLIB dataset name(s). Use colon to concatenate (or set DB2_DBRMLIB env var)'
-    )
-
-    parser.add_argument(
         '--systsprt',
         default='stdout',
         help="Path to SYSTSPRT output file or 'stdout' (default: stdout)"
@@ -97,6 +91,12 @@ Note: Command line options override environment variables.
         '--sysprint',
         default='stdout',
         help="Path to SYSPRINT output file or 'stdout' (default: stdout)"
+    )
+
+    parser.add_argument(
+        '--debug',
+        action='store_true',
+        help='Preserve temporary files for debugging (do not delete SYSTSIN, SYSIN, SYSTSPRT, SYSPRINT)'
     )
 
     parser.add_argument(
@@ -113,19 +113,16 @@ Note: Command line options override environment variables.
 
     args = parser.parse_args()
 
-    # Resolve parameters: CLI > env vars
+    # Resolve parameters: CLI > env vars > defaults
     system = args.system or os.environ.get('DB2_SYSTEM')
-    plan = args.plan or os.environ.get('DB2_PLAN')
+    plan = args.plan or os.environ.get('DB2_PLAN') or 'DSNTEP2'
     toollib = args.toollib or os.environ.get('DB2_TOOLLIB')
     steplib_arg = args.steplib or os.environ.get('DB2_STEPLIB')
-    dbrmlib_arg = args.dbrmlib or os.environ.get('DB2_DBRMLIB')
 
     # Validate required parameters
     missing_params = []
     if not system:
         missing_params.append('--system (or DB2_SYSTEM env var)')
-    if not plan:
-        missing_params.append('--plan (or DB2_PLAN env var)')
     if not toollib:
         missing_params.append('--toollib (or DB2_TOOLLIB env var)')
 
@@ -161,9 +158,8 @@ Note: Command line options override environment variables.
                 return 8
             sysin_content = stdin_content
 
-        # Parse steplib and dbrmlib (colon-separated)
+        # Parse steplib (colon-separated)
         steplib_list = steplib_arg.split(':') if steplib_arg else None
-        dbrmlib_list = dbrmlib_arg.split(':') if dbrmlib_arg else None
 
         rc = db2sql(
             sysin_content=sysin_content,
@@ -172,9 +168,9 @@ Note: Command line options override environment variables.
             plan=plan,
             toollib=toollib,
             steplib=steplib_list,
-            dbrmlib=dbrmlib_list,
             systsprt_file=args.systsprt,
             sysprint_file=args.sysprint,
+            debug=args.debug,
             verbose=args.verbose
         )
 

@@ -60,6 +60,7 @@ All Db2 commands honour these environment variables. Command line options overri
 | `DB2_TOOLLIB` | `db2sql`, `db2op` | Tool library containing DSNTEP2 or DSNTIAD |
 | `DB2_STEPLIB` | all Db2 commands | STEPLIB dataset(s), colon-separated |
 | `DB2_DBRMLIB` | `db2sql`, `db2bind` | DBRMLIB dataset(s), colon-separated |
+| `DB2_LIBRARY` | `db2bind` | Default USS filesystem directory containing DBRM files (alternative to DB2_DBRMLIB) |
 
 ```bash
 export DB2_SYSTEM=DB2P
@@ -157,6 +158,19 @@ db2sql --file grants.sql
 Generates and executes DSN `BIND PACKAGE` and/or `BIND PLAN` subcommands via IKJEFT1B.
 No SQL input is used — all parameters are on the BIND subcommands in SYSTSIN.
 
+#### Key Features
+
+- **Dual Binding Modes:**
+  - Dataset-based binding using `--dbrmlib` (traditional approach)
+  - Filesystem-based binding using `--library` (new feature)
+- **Automatic Extension Handling:** Automatically strips `.dbrm` extension from member names when present
+- **Environment Variable Support:** Both `DB2_DBRMLIB` and `DB2_LIBRARY` can be set as defaults
+- **Mutual Exclusivity:** Enforces that only one binding mode is used per invocation
+
+#### Dataset-Based Binding
+
+Traditional binding using DBRM datasets:
+
 ```bash
 # Bind a single package
 db2bind --system DB2P --package PCBSA --member CREACC \
@@ -187,18 +201,48 @@ db2bind --system DB2P \
     --steplib DB2V13.SDSNEXIT:DB2V13.SDSNLOAD
 ```
 
+#### Filesystem-Based Binding
+
+Bind packages using DBRM files from a USS filesystem directory:
+
+```bash
+# Bind a single package from filesystem
+db2bind --system DB2P --package PCBSA --member CREACC \
+    --library /u/fultonm/projects/cbsa/etc/build/obj \
+    --owner FULTONM --qualifier FULTONM --action REPLACE \
+    --steplib DB2V13.SDSNLOAD
+
+# Using environment variable
+export DB2_LIBRARY=/u/fultonm/projects/cbsa/etc/build/obj
+db2bind --system DB2P --package PCBSA --member CREACC \
+    --owner FULTONM --qualifier FULTONM
+
+# Bind multiple members from filesystem
+db2bind --system DB2P --package PCBSA \
+    --member CREACC --member CRECUST --member DBCRFUN \
+    --library /u/fultonm/projects/cbsa/etc/build/obj \
+    --owner FULTONM --qualifier FULTONM
+
+# Member names with .dbrm extension are automatically handled
+db2bind --system DB2P --package PCBSA \
+    --member CREACC.dbrm --member CRECUST.dbrm \
+    --library /u/fultonm/projects/cbsa/etc/build/obj \
+    --owner FULTONM --qualifier FULTONM
+```
+
 **Options:**
 
 - `--system ID` — Db2 subsystem ID (or `DB2_SYSTEM`) (required)
 - `--package NAME` — Package collection name for BIND PACKAGE (e.g. `PCBSA`)
 - `--plan NAME` — Plan name for BIND PLAN (e.g. `CBSA`)
-- `--member NAME` — DBRM member to bind as a package (repeatable)
+- `--member NAME` — DBRM member to bind as a package (repeatable). Extension `.dbrm` is automatically stripped if present.
 - `--owner ID` — OWNER for BIND subcommands
 - `--qualifier ID` — QUALIFIER for BIND subcommands
 - `--action ADD|REPLACE` — BIND action (default: `REPLACE`)
 - `--isolation UR|CS|RS|RR` — Isolation level for BIND PLAN
 - `--pklist ENTRY` — Package list entry for BIND PLAN PKLIST (repeatable)
-- `--dbrmlib DATASET` — DBRMLIB dataset(s), colon-separated (or `DB2_DBRMLIB`)
+- `--dbrmlib DATASET` — DBRMLIB dataset(s), colon-separated (or `DB2_DBRMLIB`). Mutually exclusive with `--library`.
+- `--library PATH` — USS filesystem directory containing DBRM files (or `DB2_LIBRARY`). Mutually exclusive with `--dbrmlib`.
 - `--steplib DATASET` — STEPLIB dataset(s), colon-separated (or `DB2_STEPLIB`)
 - `--systsprt PATH` — SYSTSPRT output file or `stdout` (default: `stdout`)
 - `--sysprint PATH` — SYSPRINT output file or `stdout` (default: `stdout`)
@@ -208,6 +252,8 @@ db2bind --system DB2P \
 
 - At least one of `--package` or `--plan` must be specified
 - `--member` is required when `--package` is specified
+- The `--library` and `--dbrmlib` parameters are mutually exclusive. Use `--library` for filesystem-based binding or `--dbrmlib` for dataset-based binding, but not both.
+- When using `--library`, DBRM files are read from the USS filesystem directory and allocated to a temporary dataset for binding
 - BIND subcommands are DSN processor commands, not SQL — DSNTEP2 is not used
 - RC 0 = success, RC 4 = warnings (acceptable for bind operations)
 
@@ -347,6 +393,7 @@ Bind Db2 packages and/or plans.
 ```python
 from batchtsocmd.main import db2bind
 
+# Dataset-based binding
 rc = db2bind(
     system="DB2P",
     package="PCBSA",
@@ -360,11 +407,23 @@ rc = db2bind(
     dbrmlib="CBSA.CICSBSA.DBRM",
     steplib=["DB2V13.SDSNEXIT", "DB2V13.SDSNLOAD"]
 )
+
+# Filesystem-based binding
+rc = db2bind(
+    system="DB2P",
+    package="PCBSA",
+    members=["CREACC", "CRECUST", "DELACC"],
+    owner="FULTONM",
+    qualifier="FULTONM",
+    action="REPLACE",
+    library="/u/fultonm/projects/cbsa/etc/build/obj",
+    steplib=["DB2V13.SDSNLOAD"]
+)
 ```
 
 **Parameters:** `system` (required), `package`, `plan` (at least one required),
 `members` (required when `package` specified), `owner`, `qualifier`, `action` (default `'REPLACE'`),
-`isolation`, `pklist`, `dbrmlib`, `steplib`, `systsprt_file`, `sysprint_file`, `verbose`
+`isolation`, `pklist`, `dbrmlib`, `library` (mutually exclusive with `dbrmlib`), `steplib`, `systsprt_file`, `sysprint_file`, `verbose`
 
 ### db2run()
 

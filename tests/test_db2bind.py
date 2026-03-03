@@ -5,6 +5,7 @@ Test Db2 BIND command execution using db2bind
 
 import os
 import sys
+import tempfile
 import unittest
 from batchtsocmd.main import db2bind
 
@@ -95,6 +96,60 @@ class TestDb2BindValidation(unittest.TestCase):
         )
         self.assertNotEqual(rc, 8, "Validation should pass with valid action")
 
+    def test_08_db2bind_library_and_dbrmlib_mutually_exclusive(self):
+        """Test db2bind validation - library and dbrmlib are mutually exclusive"""
+        rc = db2bind(
+            system='DB2P',
+            package='PCBSA',
+            members=['CREACC'],
+            dbrmlib='CBSA.CICSBSA.DBRM',
+            library='/u/fultonm/projects/cbsa/obj',
+        )
+        self.assertEqual(rc, 8, "Expected error code 8 when both library and dbrmlib specified")
+
+    def test_09_db2bind_library_path_not_exists(self):
+        """Test db2bind validation - library path must exist"""
+        rc = db2bind(
+            system='DB2P',
+            package='PCBSA',
+            members=['CREACC'],
+            library='/nonexistent/path/to/dbrms',
+        )
+        self.assertEqual(rc, 8, "Expected error code 8 when library path does not exist")
+
+    def test_10_db2bind_library_with_single_member(self):
+        """Test db2bind with filesystem library - fails at execution with invalid subsystem"""
+        # Create a temporary directory for testing
+        with tempfile.TemporaryDirectory() as tmpdir:
+            rc = db2bind(
+                system='NOOK',
+                package='PCBSA',
+                members=['CREACC'],
+                owner='IBMUSER',
+                qualifier='IBMUSER',
+                action='REPLACE',
+                library=tmpdir,
+                steplib='DB2V13.SDSNLOAD',
+            )
+            # Should fail at execution (NOOK not valid), not at validation
+            self.assertNotEqual(rc, 8, "Validation should pass for filesystem library bind")
+
+    def test_11_db2bind_library_with_dbrm_extension(self):
+        """Test db2bind strips .dbrm extension from member names"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            rc = db2bind(
+                system='NOOK',
+                package='PCBSA',
+                members=['CREACC.dbrm', 'CRECUST.DBRM'],
+                owner='IBMUSER',
+                qualifier='IBMUSER',
+                library=tmpdir,
+                steplib='DB2V13.SDSNLOAD',
+                verbose=True,
+            )
+            # Should fail at execution but pass validation
+            self.assertNotEqual(rc, 8, "Validation should pass with .dbrm extensions")
+
 
 class TestDb2BindExecution(unittest.TestCase):
     """Test db2bind execution against a live Db2 subsystem.
@@ -110,7 +165,7 @@ class TestDb2BindExecution(unittest.TestCase):
         if not self.system:
             self.skipTest("DB2_SYSTEM environment variable not set - skipping live execution tests")
 
-    def test_08_db2bind_live_plan_only(self):
+    def test_12_db2bind_live_plan_only(self):
         """Test db2bind BIND PLAN against a live Db2 subsystem"""
         plan = os.environ.get('DB2_PLAN', 'CBSA')
         owner = os.environ.get('DB2_OWNER', 'IBMUSER')
@@ -129,6 +184,35 @@ class TestDb2BindExecution(unittest.TestCase):
         print(f"\n=== db2bind live BIND PLAN RC={rc} ===", file=sys.stderr)
         # RC 0 = success, RC 4 = warnings (acceptable for bind)
         self.assertLessEqual(rc, 4, f"Expected RC <= 4 for BIND PLAN, got RC={rc}")
+
+    def test_13_db2bind_live_filesystem_package(self):
+        """Test db2bind BIND PACKAGE with filesystem library against live Db2"""
+        library = os.environ.get('DB2_LIBRARY')
+        if not library:
+            self.skipTest("DB2_LIBRARY environment variable not set")
+        
+        if not os.path.isdir(library):
+            self.skipTest(f"DB2_LIBRARY directory does not exist: {library}")
+        
+        package = os.environ.get('DB2_PACKAGE', 'PCBSA')
+        owner = os.environ.get('DB2_OWNER', 'IBMUSER')
+        member = os.environ.get('DB2_MEMBER', 'CREACC')
+        
+        rc = db2bind(
+            system=self.system,
+            package=package,
+            members=[member],
+            owner=owner,
+            qualifier=owner,
+            action='REPLACE',
+            library=library,
+            steplib=self.steplib,
+            verbose=True,
+        )
+        
+        print(f"\n=== db2bind live filesystem BIND PACKAGE RC={rc} ===", file=sys.stderr)
+        # RC 0 = success, RC 4 = warnings (acceptable for bind)
+        self.assertLessEqual(rc, 4, f"Expected RC <= 4 for filesystem BIND PACKAGE, got RC={rc}")
 
 
 if __name__ == '__main__':

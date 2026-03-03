@@ -141,6 +141,8 @@ def tsocmd(systsin_file: str, sysin_file: str,
                        sysprint_file: str = 'stdout',
                        steplib: str | list[str] | None = None,
                        dbrmlib: str | list[str] | None = None,
+                       library: str | None = None,
+                       debug: bool = False,
                        verbose: bool = False) -> int:
     """
     Execute TSO command using IKJEFT1B with SYSTSIN and SYSIN inputs
@@ -152,6 +154,8 @@ def tsocmd(systsin_file: str, sysin_file: str,
         sysprint_file: Path to SYSPRINT output file or 'stdout' (defaults to 'stdout')
         steplib: Optional STEPLIB dataset name(s) - single string or list of strings for concatenation
         dbrmlib: Optional DBRMLIB dataset name(s) - single string or list of strings for concatenation
+        library: Optional USS filesystem directory for DBRMs (mutually exclusive with dbrmlib)
+        debug: Preserve temporary files for debugging (do not delete)
         verbose: Enable verbose output
     
     Returns:
@@ -211,7 +215,8 @@ def tsocmd(systsin_file: str, sysin_file: str,
                 print(f"STEPLIB: {':'.join(steplib_list)}")
         
         # Add DBRMLIB if specified (supports concatenation)
-        if dbrmlib:
+        # Note: DBRMLIB is NOT used when library parameter is specified
+        if dbrmlib and not library:
             # Convert single string to list for uniform processing
             dbrmlib_list = [dbrmlib] if isinstance(dbrmlib, str) else dbrmlib
             # Create concatenated dataset definition
@@ -293,7 +298,8 @@ def tsocmd(systsin_file: str, sysin_file: str,
                 if verbose:
                     print(f"Warning: Could not read SYSTSPRT output: {e}", file=sys.stderr)
             finally:
-                if os.path.exists(temp_systsprt.name):
+                # Only delete if not in debug mode
+                if not debug and os.path.exists(temp_systsprt.name):
                     os.unlink(temp_systsprt.name)
         
         # 2. SYSPRINT output (if stdout was requested)
@@ -307,7 +313,8 @@ def tsocmd(systsin_file: str, sysin_file: str,
                 if verbose:
                     print(f"Warning: Could not read SYSPRINT output: {e}", file=sys.stderr)
             finally:
-                if os.path.exists(temp_sysprint.name):
+                # Only delete if not in debug mode
+                if not debug and os.path.exists(temp_sysprint.name):
                     os.unlink(temp_sysprint.name)
         
         if verbose or response.rc != 0:
@@ -331,31 +338,46 @@ def tsocmd(systsin_file: str, sysin_file: str,
         return 16
         
     finally:
-        # Clean up temporary files
-        if temp_systsin and os.path.exists(temp_systsin.name):
-            os.unlink(temp_systsin.name)
-        if temp_sysin_padded and os.path.exists(temp_sysin_padded.name):
-            os.unlink(temp_sysin_padded.name)
-        if temp_sysin and os.path.exists(temp_sysin.name):
-            os.unlink(temp_sysin.name)
-        # Note: temp_systsprt and temp_sysprint are cleaned up in the main try block
-        # after reading their contents, but we check here in case of early exit
-        if temp_systsprt and os.path.exists(temp_systsprt.name):
-            os.unlink(temp_systsprt.name)
-        if temp_sysprint and os.path.exists(temp_sysprint.name):
-            os.unlink(temp_sysprint.name)
+        # Clean up temporary files unless debug mode is enabled
+        if not debug:
+            if temp_systsin and os.path.exists(temp_systsin.name):
+                os.unlink(temp_systsin.name)
+            if temp_sysin_padded and os.path.exists(temp_sysin_padded.name):
+                os.unlink(temp_sysin_padded.name)
+            if temp_sysin and os.path.exists(temp_sysin.name):
+                os.unlink(temp_sysin.name)
+            # Note: temp_systsprt and temp_sysprint are cleaned up in the main try block
+            # after reading their contents, but we check here in case of early exit
+            if temp_systsprt and os.path.exists(temp_systsprt.name):
+                os.unlink(temp_systsprt.name)
+            if temp_sysprint and os.path.exists(temp_sysprint.name):
+                os.unlink(temp_sysprint.name)
+        else:
+            # In debug mode, print locations of preserved files
+            if verbose:
+                print("\n=== DEBUG: Temporary files preserved ===", file=sys.stderr)
+                if temp_systsin and os.path.exists(temp_systsin.name):
+                    print(f"SYSTSIN: {temp_systsin.name}", file=sys.stderr)
+                if temp_sysin_padded and os.path.exists(temp_sysin_padded.name):
+                    print(f"SYSIN (padded): {temp_sysin_padded.name}", file=sys.stderr)
+                if temp_sysin and os.path.exists(temp_sysin.name):
+                    print(f"SYSIN (EBCDIC): {temp_sysin.name}", file=sys.stderr)
+                if temp_systsprt and os.path.exists(temp_systsprt.name):
+                    print(f"SYSTSPRT: {temp_systsprt.name}", file=sys.stderr)
+                if temp_sysprint and os.path.exists(temp_sysprint.name):
+                    print(f"SYSPRINT: {temp_sysprint.name}", file=sys.stderr)
 
 
 def db2sql(
     sysin_content: str | None = None,
     sysin_file: str | None = None,
     system: str | None = None,
-    plan: str | None = None,
+    plan: str = 'DSNTEP2',
     toollib: str | None = None,
-    dbrmlib: str | list[str] | None = None,
     steplib: str | list[str] | None = None,
     systsprt_file: str = 'stdout',
     sysprint_file: str = 'stdout',
+    debug: bool = False,
     verbose: bool = False
 ) -> int:
     """
@@ -368,12 +390,12 @@ def db2sql(
         sysin_content: SQL statements as a string (mutually exclusive with sysin_file)
         sysin_file: Path to file containing SQL statements (mutually exclusive with sysin_content)
         system: Db2 subsystem ID (required)
-        plan: Db2 plan name for DSNTEP2 (required)
+        plan: Db2 plan name for DSNTEP2 (defaults to 'DSNTEP2')
         toollib: Db2 tool library containing DSNTEP2 (required)
-        dbrmlib: Optional DBRMLIB dataset name(s) - single string or list for concatenation
         steplib: Optional STEPLIB dataset name(s) - single string or list for concatenation
         systsprt_file: Path to SYSTSPRT output file or 'stdout' (defaults to 'stdout')
         sysprint_file: Path to SYSPRINT output file or 'stdout' (defaults to 'stdout')
+        debug: Preserve temporary files for debugging (do not delete)
         verbose: Enable verbose output
 
     Returns:
@@ -392,10 +414,6 @@ def db2sql(
     # Validate required parameters
     if system is None:
         print("ERROR: system parameter is required", file=sys.stderr)
-        return 8
-
-    if plan is None:
-        print("ERROR: plan parameter is required", file=sys.stderr)
         return 8
 
     if toollib is None:
@@ -442,21 +460,31 @@ def db2sql(
             systsprt_file=systsprt_file,
             sysprint_file=sysprint_file,
             steplib=steplib,
-            dbrmlib=dbrmlib,
+            debug=debug,
             verbose=verbose
         )
-
+        
         return rc
-
+        
     except Exception as e:
         print(f"ERROR: Failed to execute Db2 SQL: {e}", file=sys.stderr)
         return 16
-
+        
     finally:
-        if temp_systsin and os.path.exists(temp_systsin.name):
-            os.unlink(temp_systsin.name)
-        if temp_sysin and os.path.exists(temp_sysin.name):
-            os.unlink(temp_sysin.name)
+        # Clean up temporary files unless debug mode is enabled
+        if not debug:
+            if temp_systsin and os.path.exists(temp_systsin.name):
+                os.unlink(temp_systsin.name)
+            if temp_sysin and os.path.exists(temp_sysin.name):
+                os.unlink(temp_sysin.name)
+        else:
+            # In debug mode, print locations of preserved files
+            if verbose:
+                print("\n=== DEBUG: Temporary files preserved ===", file=sys.stderr)
+                if temp_systsin and os.path.exists(temp_systsin.name):
+                    print(f"SYSTSIN: {temp_systsin.name}", file=sys.stderr)
+                if temp_sysin and os.path.exists(temp_sysin.name):
+                    print(f"SYSIN: {temp_sysin.name}", file=sys.stderr)
 
 
 def db2op(
@@ -468,6 +496,7 @@ def db2op(
     steplib: str | list[str] | None = None,
     systsprt_file: str = 'stdout',
     sysprint_file: str = 'stdout',
+    debug: bool = False,
     verbose: bool = False
 ) -> int:
     """
@@ -485,6 +514,7 @@ def db2op(
         steplib: Optional STEPLIB dataset name(s) - single string or list for concatenation
         systsprt_file: Path to SYSTSPRT output file or 'stdout' (defaults to 'stdout')
         sysprint_file: Path to SYSPRINT output file or 'stdout' (defaults to 'stdout')
+        debug: Preserve temporary files for debugging (do not delete)
         verbose: Enable verbose output
 
     Returns:
@@ -562,20 +592,31 @@ def db2op(
             systsprt_file=systsprt_file,
             sysprint_file=sysprint_file,
             steplib=steplib,
+            debug=debug,
             verbose=verbose
         )
-
+        
         return rc
-
+        
     except Exception as e:
         print(f"ERROR: Failed to execute Db2 operator command: {e}", file=sys.stderr)
         return 16
-
+        
     finally:
-        if temp_systsin and os.path.exists(temp_systsin.name):
-            os.unlink(temp_systsin.name)
-        if temp_sysin and os.path.exists(temp_sysin.name):
-            os.unlink(temp_sysin.name)
+        # Clean up temporary files unless debug mode is enabled
+        if not debug:
+            if temp_systsin and os.path.exists(temp_systsin.name):
+                os.unlink(temp_systsin.name)
+            if temp_sysin and os.path.exists(temp_sysin.name):
+                os.unlink(temp_sysin.name)
+        else:
+            # In debug mode, print locations of preserved files
+            if verbose:
+                print("\n=== DEBUG: Temporary files preserved ===", file=sys.stderr)
+                if temp_systsin and os.path.exists(temp_systsin.name):
+                    print(f"SYSTSIN: {temp_systsin.name}", file=sys.stderr)
+                if temp_sysin and os.path.exists(temp_sysin.name):
+                    print(f"SYSIN: {temp_sysin.name}", file=sys.stderr)
 
 
 def db2bind(
@@ -589,9 +630,11 @@ def db2bind(
     isolation: str | None = None,
     pklist: str | list[str] | None = None,
     dbrmlib: str | list[str] | None = None,
+    library: str | None = None,
     steplib: str | list[str] | None = None,
     systsprt_file: str = 'stdout',
     sysprint_file: str = 'stdout',
+    debug: bool = False,
     verbose: bool = False
 ) -> int:
     """
@@ -611,6 +654,7 @@ def db2bind(
         isolation: Isolation level for BIND PLAN (e.g. 'UR', 'CS', 'RS', 'RR')
         pklist: Package list for BIND PLAN PKLIST - single string or list
         dbrmlib: DBRMLIB dataset name(s) - single string or list for concatenation
+        library: USS filesystem directory containing DBRMs (mutually exclusive with dbrmlib)
         steplib: Optional STEPLIB dataset name(s) - single string or list for concatenation
         systsprt_file: Path to SYSTSPRT output file or 'stdout' (defaults to 'stdout')
         sysprint_file: Path to SYSPRINT output file or 'stdout' (defaults to 'stdout')
@@ -633,6 +677,16 @@ def db2bind(
         print("ERROR: members parameter is required when package is specified", file=sys.stderr)
         return 8
 
+    # Validate mutual exclusivity of dbrmlib and library
+    if dbrmlib is not None and library is not None:
+        print("ERROR: dbrmlib and library parameters are mutually exclusive", file=sys.stderr)
+        return 8
+
+    # Validate library path exists if specified
+    if library is not None and not os.path.isdir(library):
+        print(f"ERROR: Library directory does not exist: {library}", file=sys.stderr)
+        return 8
+
     # Normalise members to list
     members_list: list[str] = []
     if members is not None:
@@ -644,16 +698,32 @@ def db2bind(
     # One BIND PACKAGE per member
     if package is not None:
         for member in members_list:
+            # Strip .dbrm extension if present for MEMBER parameter
+            member_name = member[:-5] if member.lower().endswith('.dbrm') else member
+            
             bind_pkg = f"  BIND PACKAGE({package})"
             if owner:
                 bind_pkg += f" OWNER({owner}) -"
                 lines.append(bind_pkg)
                 qualifier_line = f"  QUALIFIER({qualifier}) -" if qualifier else "  -"
                 lines.append(qualifier_line)
-                lines.append(f"  MEMBER({member}) -")
+                
+                # Add LIBRARY parameter if using filesystem
+                if library:
+                    lines.append(f'  LIBRARY("{library}") -')
+                    lines.append(f'  MEMBER("{member_name}") -')
+                else:
+                    lines.append(f"  MEMBER({member_name}) -")
             else:
-                bind_pkg += f" MEMBER({member}) -"
-                lines.append(bind_pkg)
+                # Add LIBRARY parameter if using filesystem
+                if library:
+                    bind_pkg += f' LIBRARY("{library}") -'
+                    lines.append(bind_pkg)
+                    lines.append(f'  MEMBER("{member_name}") -')
+                else:
+                    bind_pkg += f" MEMBER({member_name}) -"
+                    lines.append(bind_pkg)
+            
             lines.append(f"  ACTION({action})")
             lines.append("")
 
@@ -709,20 +779,32 @@ def db2bind(
             sysprint_file=sysprint_file,
             steplib=steplib,
             dbrmlib=dbrmlib,
+            library=library,
+            debug=debug,
             verbose=verbose
         )
-
+        
         return rc
-
+        
     except Exception as e:
         print(f"ERROR: Failed to execute Db2 BIND: {e}", file=sys.stderr)
         return 16
-
+        
     finally:
-        if temp_systsin and os.path.exists(temp_systsin.name):
-            os.unlink(temp_systsin.name)
-        if temp_sysin and os.path.exists(temp_sysin.name):
-            os.unlink(temp_sysin.name)
+        # Clean up temporary files unless debug mode is enabled
+        if not debug:
+            if temp_systsin and os.path.exists(temp_systsin.name):
+                os.unlink(temp_systsin.name)
+            if temp_sysin and os.path.exists(temp_sysin.name):
+                os.unlink(temp_sysin.name)
+        else:
+            # In debug mode, print locations of preserved files
+            if verbose:
+                print("\n=== DEBUG: Temporary files preserved ===", file=sys.stderr)
+                if temp_systsin and os.path.exists(temp_systsin.name):
+                    print(f"SYSTSIN: {temp_systsin.name}", file=sys.stderr)
+                if temp_sysin and os.path.exists(temp_sysin.name):
+                    print(f"SYSIN: {temp_sysin.name}", file=sys.stderr)
 
 
 def db2run(
@@ -734,6 +816,7 @@ def db2run(
     steplib: str | list[str] | None = None,
     systsprt_file: str = 'stdout',
     sysprint_file: str = 'stdout',
+    debug: bool = False,
     verbose: bool = False
 ) -> int:
     """
@@ -751,6 +834,7 @@ def db2run(
         steplib: Optional STEPLIB dataset name(s) - single string or list for concatenation
         systsprt_file: Path to SYSTSPRT output file or 'stdout' (defaults to 'stdout')
         sysprint_file: Path to SYSPRINT output file or 'stdout' (defaults to 'stdout')
+        debug: Preserve temporary files for debugging (do not delete)
         verbose: Enable verbose output
 
     Returns:
@@ -810,6 +894,7 @@ def db2run(
             systsprt_file=systsprt_file,
             sysprint_file=sysprint_file,
             steplib=steplib,
+            debug=debug,
             verbose=verbose
         )
 
@@ -820,10 +905,20 @@ def db2run(
         return 16
 
     finally:
-        if temp_systsin and os.path.exists(temp_systsin.name):
-            os.unlink(temp_systsin.name)
-        if temp_sysin and os.path.exists(temp_sysin.name):
-            os.unlink(temp_sysin.name)
+        # Clean up temporary files unless debug mode is enabled
+        if not debug:
+            if temp_systsin and os.path.exists(temp_systsin.name):
+                os.unlink(temp_systsin.name)
+            if temp_sysin and os.path.exists(temp_sysin.name):
+                os.unlink(temp_sysin.name)
+        else:
+            # In debug mode, print locations of preserved files
+            if verbose:
+                print("\n=== DEBUG: Temporary files preserved ===", file=sys.stderr)
+                if temp_systsin and os.path.exists(temp_systsin.name):
+                    print(f"SYSTSIN: {temp_systsin.name}", file=sys.stderr)
+                if temp_sysin and os.path.exists(temp_sysin.name):
+                    print(f"SYSIN: {temp_sysin.name}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------

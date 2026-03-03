@@ -20,6 +20,7 @@ Environment Variables:
   DB2_SYSTEM    - Default Db2 subsystem ID
   DB2_STEPLIB   - Default STEPLIB dataset(s)
   DB2_DBRMLIB   - Default DBRMLIB dataset(s)
+  DB2_LIBRARY   - Default USS filesystem directory for DBRMs
 
 Examples:
   # Bind a single package
@@ -44,9 +45,16 @@ Examples:
       --dbrmlib CBSA.CICSBSA.DBRM \\
       --steplib DB2V13.SDSNEXIT:DB2V13.SDSNLOAD
 
+  # Bind packages from filesystem directory
+  db2bind --system DB2P --package PCBSA --member CREACC \\
+      --library /u/fultonm/projects/cbsa/etc/build/obj \\
+      --owner FULTONM --qualifier FULTONM --action REPLACE \\
+      --steplib DB2V13.SDSNLOAD
+
 Note: Command line options override environment variables.
       BIND subcommands are DSN processor commands, not SQL.
       No SYSIN SQL input is used - all parameters are on the BIND subcommands.
+      Use --library for filesystem DBRMs or --dbrmlib for dataset DBRMs (mutually exclusive).
 """
     )
 
@@ -110,6 +118,11 @@ Note: Command line options override environment variables.
     )
 
     parser.add_argument(
+        '--library',
+        help='USS filesystem directory containing DBRM files (or set DB2_LIBRARY env var). Mutually exclusive with --dbrmlib'
+    )
+
+    parser.add_argument(
         '--steplib',
         help='Optional STEPLIB dataset name(s). Use colon to concatenate (or set DB2_STEPLIB env var)'
     )
@@ -124,6 +137,12 @@ Note: Command line options override environment variables.
         '--sysprint',
         default='stdout',
         help="Path to SYSPRINT output file or 'stdout' (default: stdout)"
+    )
+
+    parser.add_argument(
+        '--debug',
+        action='store_true',
+        help='Preserve temporary files for debugging (do not delete SYSTSIN, SYSIN, SYSTSPRT, SYSPRINT)'
     )
 
     parser.add_argument(
@@ -144,6 +163,7 @@ Note: Command line options override environment variables.
     system = args.system or os.environ.get('DB2_SYSTEM')
     steplib_arg = args.steplib or os.environ.get('DB2_STEPLIB')
     dbrmlib_arg = args.dbrmlib or os.environ.get('DB2_DBRMLIB')
+    library_arg = args.library or os.environ.get('DB2_LIBRARY')
 
     # Validate required parameters
     missing_params = []
@@ -152,6 +172,18 @@ Note: Command line options override environment variables.
 
     if missing_params:
         print(f"ERROR: Missing required parameters: {', '.join(missing_params)}", file=sys.stderr)
+        print("\nUse --help for usage information", file=sys.stderr)
+        return 1
+
+    # Validate mutual exclusivity of dbrmlib and library
+    if dbrmlib_arg and library_arg:
+        print("ERROR: --dbrmlib and --library are mutually exclusive. Use one or the other.", file=sys.stderr)
+        print("\nUse --help for usage information", file=sys.stderr)
+        return 1
+
+    # Validate library path exists if specified
+    if library_arg and not os.path.isdir(library_arg):
+        print(f"ERROR: Library directory does not exist: {library_arg}", file=sys.stderr)
         print("\nUse --help for usage information", file=sys.stderr)
         return 1
 
@@ -183,9 +215,11 @@ Note: Command line options override environment variables.
             isolation=args.isolation,
             pklist=args.pklist,
             dbrmlib=dbrmlib_list,
+            library=library_arg,
             steplib=steplib_list,
             systsprt_file=args.systsprt,
             sysprint_file=args.sysprint,
+            debug=args.debug,
             verbose=args.verbose
         )
 

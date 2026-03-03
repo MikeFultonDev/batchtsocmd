@@ -90,6 +90,12 @@ Note: Command line options override environment variables.
     )
 
     parser.add_argument(
+        '--debug',
+        action='store_true',
+        help='Preserve temporary files for debugging (do not delete SYSTSIN, SYSIN, SYSTSPRT, SYSPRINT)'
+    )
+
+    parser.add_argument(
         '-v', '--verbose',
         action='store_true',
         help='Enable verbose output'
@@ -161,6 +167,7 @@ Note: Command line options override environment variables.
             steplib=steplib_list,
             systsprt_file=args.systsprt,
             sysprint_file=args.sysprint,
+            debug=args.debug,
             verbose=args.verbose
         )
 
