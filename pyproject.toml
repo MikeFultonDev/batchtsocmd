@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "batchtsocmd"
-version = "0.2.0"
+version = "0.2.1"
 description = "Run TSO and Db2 commands via IKJEFT1B"
 readme = "README.md"
 authors = [{name = "Mike Fulton"}]

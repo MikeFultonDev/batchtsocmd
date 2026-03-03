@@ -2,7 +2,7 @@
 batchtsocmd - Execute TSO and Db2 commands via IKJEFT1B with encoding conversion
 """
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 __author__ = "Mike Fulton"
 
 from .main import tsocmd, db2sql, db2op, db2bind, db2run, main, version

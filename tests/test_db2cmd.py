@@ -545,15 +545,17 @@ CREATE DATABASE DUMMY
         self.assertEqual(rc, 8, "Expected error code 8 when system parameter is missing")
 
     def test_10_db2sql_validation_missing_plan(self):
-        """Test db2sql validation - plan parameter is required"""
+        """Test db2sql with default plan - plan parameter now has default value 'DSNTEP2'"""
         rc = db2sql(
             sysin_content="SELECT * FROM SYSIBM.SYSTABLES;",
             system='DB2P',
             toollib='DSNC10.DBCG.RUNLIB.LOAD'
         )
 
-        # Should return error code 8
-        self.assertEqual(rc, 8, "Expected error code 8 when plan parameter is missing")
+        # Plan validation should pass (default 'DSNTEP2' is used)
+        # Execution may fail with rc 12 due to DSN command issues, but not due to missing plan
+        # The key is that we don't get rc 8 (validation error)
+        self.assertNotEqual(rc, 8, "Should not get validation error - default plan 'DSNTEP2' should be used")
 
     def test_11_db2sql_validation_missing_toollib(self):
         """Test db2sql validation - toollib parameter is required"""
